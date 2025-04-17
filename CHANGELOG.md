@@ -8,26 +8,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.7.0] - 2025-04-18
 
 ### Added
-- Social System
-  * Dynamic relationships with NPCs
-  * Multiple relationship types
-  * Friendship, trust, and respect levels
-  * Social interactions and events
-  * Relationship decay over time
-  * Networking benefits
-  * Family and professional connections
-  * Social event generation
+- Guild System
+  * Player-driven social organization
+  * Multiple guild types (Combat, Crafting, Trading, etc.)
+  * Hierarchical rank system
+  * Guild treasury and contributions
+  * Guild events and achievements
+  * Member management
+  * Guild recruitment
+  * Guild dissolution
 
 ### Added UI Features
-- Social Interface
-  * Relationship management panel
-  * Interaction system
-  * Recent events tracking
-  * Relationship status display
-  * Social network visualization
-  * Filtering and sorting options
-  * Relationship progression tracking
-  * Social event notifications
+- Guild Interface
+  * Guild creation and management
+  * Member roster with filtering
+  * Event organization
+  * Treasury management
+  * Achievement tracking
+  * Guild search and filtering
+  * Member promotion system
+  * Event participation
 
 ## [1.6.0] - 2025-04-18
 
