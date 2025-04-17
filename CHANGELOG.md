@@ -18,6 +18,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   * Guild recruitment
   * Guild dissolution
 
+- Clan System
+  * Honor-based clan organization
+  * Multiple clan focuses (Warrior, Mystic, etc.)
+  * Alliance and rivalry system
+  * Clan traditions and influence
+  * Elder council system
+  * Inter-clan relations
+  * Honor progression
+  * Clan ceremonies
+
 ### Added UI Features
 - Guild Interface
   * Guild creation and management
@@ -28,6 +38,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   * Guild search and filtering
   * Member promotion system
   * Event participation
+
+- Clan Interface
+  * Clan formation and management
+  * Honor tracking and ranks
+  * Alliance management
+  * Tradition system
+  * Member progression
+  * Clan influence tracking
+  * Rivalry declaration
+  * Elder promotions
 
 ## [1.6.0] - 2025-04-18
 
