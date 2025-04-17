@@ -1,220 +1,186 @@
 using UnityEngine;
 using UnityEngine.UI;
+using TMPro;
 using System.Collections.Generic;
 
-public class TeamUI : MonoBehaviour
+namespace REcreationOfSpace.UI
 {
-    [System.Serializable]
-    public class TeamMemberUI
+    public class TeamUI : MonoBehaviour
     {
-        public GameObject panel;
-        public Text nameText;
-        public Image trustBar;
-        public Image contributionBar;
-        public GameObject tradingIcon;
-    }
-
-    [Header("UI References")]
-    public GameObject teamPanel;
-    public GameObject memberPrefab;
-    public Transform membersContainer;
-    public Text teamStatusText;
-    public Image teamBondBar;
-
-    [Header("Visual Settings")]
-    public Color lowTrustColor = Color.yellow;
-    public Color highTrustColor = Color.green;
-    public float updateInterval = 0.5f;
-
-    private TeamSystem teamSystem;
-    private TradingSystem tradingSystem;
-    private Dictionary<GameObject, TeamMemberUI> memberUIs = new Dictionary<GameObject, TeamMemberUI>();
-    private float nextUpdate;
-
-    void Start()
-    {
-        teamSystem = GetComponent<TeamSystem>();
-        tradingSystem = GetComponent<TradingSystem>();
-        nextUpdate = Time.time;
-
-        // Initially hide panel
-        if (teamPanel != null)
+        [System.Serializable]
+        private class MemberDisplay
         {
-            teamPanel.SetActive(false);
+            public GameObject displayObject;
+            public Image portraitImage;
+            public TextMeshProUGUI nameText;
+            public Slider healthBar;
+            public Image leaderIcon;
         }
-    }
 
-    void Update()
-    {
-        // Toggle UI visibility
-        if (Input.GetKeyDown(KeyCode.Tab))
+        [Header("UI Elements")]
+        [SerializeField] private GameObject memberDisplayPrefab;
+        [SerializeField] private Transform memberContainer;
+        [SerializeField] private GameObject noTeamMessage;
+        [SerializeField] private GameObject leaderControls;
+
+        [Header("Settings")]
+        [SerializeField] private Color leaderColor = Color.yellow;
+        [SerializeField] private Color memberColor = Color.white;
+
+        private Dictionary<GameObject, MemberDisplay> memberDisplays = new Dictionary<GameObject, MemberDisplay>();
+        private TeamSystem playerTeam;
+
+        private void Start()
         {
-            if (teamPanel != null)
+            // Find player's team system
+            var player = GameObject.FindGameObjectWithTag("Player");
+            if (player != null)
             {
-                teamPanel.SetActive(!teamPanel.activeSelf);
-            }
-        }
-
-        // Update UI at intervals
-        if (Time.time >= nextUpdate)
-        {
-            UpdateTeamUI();
-            nextUpdate = Time.time + updateInterval;
-        }
-    }
-
-    void UpdateTeamUI()
-    {
-        if (teamSystem == null || teamPanel == null) return;
-
-        bool isInTeam = teamSystem.IsInTeam();
-        teamPanel.SetActive(isInTeam && teamPanel.activeSelf);
-
-        if (!isInTeam) return;
-
-        // Update team status
-        if (teamStatusText != null)
-        {
-            string status = teamSystem.IsTeamLeader() ? "Team Leader" : "Team Member";
-            teamStatusText.text = $"Status: {status}";
-        }
-
-        // Update member displays
-        UpdateMemberDisplays();
-
-        // Update team bond bar
-        UpdateTeamBond();
-    }
-
-    void UpdateMemberDisplays()
-    {
-        var teamMembers = teamSystem.GetTeamMembers();
-        
-        // Remove displays for members no longer in team
-        List<GameObject> toRemove = new List<GameObject>();
-        foreach (var kvp in memberUIs)
-        {
-            bool stillInTeam = false;
-            foreach (var member in teamMembers)
-            {
-                if (member.character == kvp.Key)
+                playerTeam = player.GetComponent<TeamSystem>();
+                if (playerTeam != null)
                 {
-                    stillInTeam = true;
-                    break;
+                    // Subscribe to events
+                    playerTeam.onMemberJoined.AddListener(OnMemberJoined);
+                    playerTeam.onMemberLeft.AddListener(OnMemberLeft);
+                    playerTeam.onLeaderChanged.AddListener(OnLeaderChanged);
                 }
             }
-            if (!stillInTeam)
+
+            UpdateUI();
+        }
+
+        private void UpdateUI()
+        {
+            if (playerTeam == null || !playerTeam.HasTeam())
             {
-                toRemove.Add(kvp.Key);
+                // Show no team message
+                if (noTeamMessage != null)
+                    noTeamMessage.SetActive(true);
+                if (leaderControls != null)
+                    leaderControls.SetActive(false);
+                return;
+            }
+
+            // Hide no team message
+            if (noTeamMessage != null)
+                noTeamMessage.SetActive(false);
+
+            // Show/hide leader controls
+            if (leaderControls != null)
+                leaderControls.SetActive(playerTeam.IsTeamLeader());
+
+            // Update member displays
+            var members = playerTeam.GetTeamMembers();
+            var leader = playerTeam.GetTeamLeader();
+
+            foreach (var member in members)
+            {
+                if (!memberDisplays.ContainsKey(member))
+                {
+                    CreateMemberDisplay(member);
+                }
+
+                UpdateMemberDisplay(member, leader);
+            }
+
+            // Remove displays for members no longer in team
+            var displayKeys = new List<GameObject>(memberDisplays.Keys);
+            foreach (var key in displayKeys)
+            {
+                if (!members.Contains(key))
+                {
+                    RemoveMemberDisplay(key);
+                }
             }
         }
 
-        foreach (var key in toRemove)
+        private void CreateMemberDisplay(GameObject member)
         {
-            if (memberUIs[key].panel != null)
+            if (memberDisplayPrefab == null || memberContainer == null)
+                return;
+
+            var displayObj = Instantiate(memberDisplayPrefab, memberContainer);
+            var display = new MemberDisplay
             {
-                Destroy(memberUIs[key].panel);
+                displayObject = displayObj,
+                portraitImage = displayObj.GetComponentInChildren<Image>(),
+                nameText = displayObj.GetComponentInChildren<TextMeshProUGUI>(),
+                healthBar = displayObj.GetComponentInChildren<Slider>(),
+                leaderIcon = displayObj.transform.Find("LeaderIcon")?.GetComponent<Image>()
+            };
+
+            memberDisplays[member] = display;
+        }
+
+        private void UpdateMemberDisplay(GameObject member, GameObject leader)
+        {
+            if (!memberDisplays.ContainsKey(member))
+                return;
+
+            var display = memberDisplays[member];
+            bool isLeader = member == leader;
+
+            // Update name
+            if (display.nameText != null)
+            {
+                display.nameText.text = member.name;
+                display.nameText.color = isLeader ? leaderColor : memberColor;
             }
-            memberUIs.Remove(key);
-        }
 
-        // Update or create displays for current members
-        foreach (var member in teamMembers)
-        {
-            if (member.character == null) continue;
-
-            TeamMemberUI memberUI;
-            if (!memberUIs.TryGetValue(member.character, out memberUI))
+            // Update health bar
+            if (display.healthBar != null)
             {
-                memberUI = CreateMemberUI(member);
-                memberUIs[member.character] = memberUI;
+                var health = member.GetComponent<Health>();
+                if (health != null)
+                {
+                    display.healthBar.value = health.GetHealthPercentage();
+                }
             }
 
-            UpdateMemberUI(memberUI, member);
-        }
-    }
-
-    TeamMemberUI CreateMemberUI(TeamSystem.TeamMember member)
-    {
-        if (memberPrefab == null || membersContainer == null) return null;
-
-        GameObject panel = Instantiate(memberPrefab, membersContainer);
-        TeamMemberUI ui = new TeamMemberUI();
-        ui.panel = panel;
-
-        // Get references to UI elements
-        ui.nameText = panel.transform.Find("NameText")?.GetComponent<Text>();
-        ui.trustBar = panel.transform.Find("TrustBar")?.GetComponent<Image>();
-        ui.contributionBar = panel.transform.Find("ContributionBar")?.GetComponent<Image>();
-        ui.tradingIcon = panel.transform.Find("TradingIcon")?.gameObject;
-
-        return ui;
-    }
-
-    void UpdateMemberUI(TeamMemberUI ui, TeamSystem.TeamMember member)
-    {
-        if (ui == null) return;
-
-        // Update name
-        if (ui.nameText != null)
-        {
-            string memberName = member.character.name;
-            ui.nameText.text = memberName;
-        }
-
-        // Update trust bar
-        if (ui.trustBar != null)
-        {
-            ui.trustBar.fillAmount = member.trustLevel;
-            ui.trustBar.color = Color.Lerp(lowTrustColor, highTrustColor, member.trustLevel);
-        }
-
-        // Update contribution bar
-        if (ui.contributionBar != null)
-        {
-            ui.contributionBar.fillAmount = member.contributionScore / 100f;
-        }
-
-        // Update trading icon
-        if (ui.tradingIcon != null)
-        {
-            TradingSystem memberTrading = member.character.GetComponent<TradingSystem>();
-            ui.tradingIcon.SetActive(memberTrading != null && memberTrading.IsTrading());
-        }
-    }
-
-    void UpdateTeamBond()
-    {
-        if (teamBondBar == null) return;
-
-        // Calculate average trust level
-        float totalTrust = 0f;
-        int memberCount = 0;
-        
-        foreach (var member in teamSystem.GetTeamMembers())
-        {
-            if (member.character != null)
+            // Show/hide leader icon
+            if (display.leaderIcon != null)
             {
-                totalTrust += member.trustLevel;
-                memberCount++;
+                display.leaderIcon.gameObject.SetActive(isLeader);
             }
         }
 
-        float averageTrust = memberCount > 0 ? totalTrust / memberCount : 0f;
-        teamBondBar.fillAmount = averageTrust;
-        teamBondBar.color = Color.Lerp(lowTrustColor, highTrustColor, averageTrust);
-    }
-
-    void OnDestroy()
-    {
-        // Clean up instantiated UI elements
-        foreach (var ui in memberUIs.Values)
+        private void RemoveMemberDisplay(GameObject member)
         {
-            if (ui.panel != null)
+            if (!memberDisplays.ContainsKey(member))
+                return;
+
+            var display = memberDisplays[member];
+            if (display.displayObject != null)
             {
-                Destroy(ui.panel);
+                Destroy(display.displayObject);
+            }
+
+            memberDisplays.Remove(member);
+        }
+
+        private void OnMemberJoined(GameObject member)
+        {
+            UpdateUI();
+        }
+
+        private void OnMemberLeft(GameObject member)
+        {
+            UpdateUI();
+        }
+
+        private void OnLeaderChanged(GameObject newLeader)
+        {
+            UpdateUI();
+        }
+
+        private void OnDestroy()
+        {
+            if (playerTeam != null)
+            {
+                playerTeam.onMemberJoined.RemoveListener(OnMemberJoined);
+                playerTeam.onMemberLeft.RemoveListener(OnMemberLeft);
+                playerTeam.onLeaderChanged.RemoveListener(OnLeaderChanged);
             }
         }
-        memberUIs.Clear();
     }
 }

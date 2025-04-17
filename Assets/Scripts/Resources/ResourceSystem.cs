@@ -1,275 +1,120 @@
 using UnityEngine;
 using System.Collections.Generic;
+using UnityEngine.Events;
 
-public class ResourceSystem : MonoBehaviour
+namespace REcreationOfSpace.Resources
 {
-    [System.Serializable]
-    public class Resource
+    public class ResourceSystem : MonoBehaviour
     {
-        public string name;
-        public ResourceType type;
-        public float quantity;
-        public float maxStack = 100f;
-        public string description;
-        public float consciousnessValue; // How much this resource contributes to consciousness
-    }
-
-    public enum ResourceType
-    {
-        Natural,    // Basic natural resources
-        Refined,    // Processed resources
-        Pure,       // Pure form of natural resources
-        Rare,       // Rare natural resources
-        Energy      // Natural energy resources
-    }
-
-    [Header("Resource Settings")]
-    public float gatherRange = 2f;
-    public float gatherSpeed = 1f;
-    public LayerMask resourceMask;
-
-    private Dictionary<string, Resource> inventory = new Dictionary<string, Resource>();
-    private bool isGathering = false;
-    private float gatherProgress = 0f;
-    private GameObject currentResourceNode;
-
-    // Define base resources
-    public static readonly Resource[] baseResources = new Resource[]
-    {
-        new Resource {
-            name = "Wood",
-            type = ResourceType.Natural,
-            quantity = 0f,
-            description = "Natural wood from the surface",
-            consciousnessValue = 2f
-        },
-        new Resource {
-            name = "Crystal",
-            type = ResourceType.Natural,
-            quantity = 0f,
-            description = "Natural crystal formations",
-            consciousnessValue = 5f
-        },
-        new Resource {
-            name = "Water",
-            type = ResourceType.Natural,
-            quantity = 0f,
-            description = "Surface water",
-            consciousnessValue = 3f
-        },
-        new Resource {
-            name = "Stone",
-            type = ResourceType.Natural,
-            quantity = 0f,
-            description = "Natural stone",
-            consciousnessValue = 4f
-        },
-        new Resource {
-            name = "Energy",
-            type = ResourceType.Energy,
-            quantity = 0f,
-            description = "Natural energy source",
-            consciousnessValue = 8f
-        }
-    };
-
-    void Start()
-    {
-        InitializeInventory();
-    }
-
-    void Update()
-    {
-        if (Input.GetKey(KeyCode.F)) // F for gather
+        [System.Serializable]
+        public class ResourceData
         {
-            TryGatherResource();
+            public string type;
+            public int amount;
+            public int maxAmount = 999;
+            public Sprite icon;
         }
-        
-        if (isGathering)
-        {
-            UpdateGathering();
-        }
-    }
 
-    private void InitializeInventory()
-    {
-        foreach (var resource in baseResources)
+        [Header("Resources")]
+        [SerializeField] private List<ResourceData> startingResources = new List<ResourceData>();
+
+        public UnityEvent<string, int> onResourceChanged; // Resource type, new amount
+        public UnityEvent<string> onResourceMaxed; // Resource type
+
+        private Dictionary<string, ResourceData> resources = new Dictionary<string, ResourceData>();
+
+        private void Awake()
         {
-            inventory[resource.name] = new Resource
+            // Initialize resources
+            foreach (var resource in startingResources)
             {
-                name = resource.name,
-                type = resource.type,
-                quantity = 0f,
-                maxStack = resource.maxStack,
-                description = resource.description,
-                consciousnessValue = resource.consciousnessValue
-            };
-        }
-    }
-
-    private void TryGatherResource()
-    {
-        if (isGathering) return;
-
-        // Check for resources in range
-        Collider[] resourceNodes = Physics.OverlapSphere(transform.position, gatherRange, resourceMask);
-        
-        foreach (var node in resourceNodes)
-        {
-            ResourceNode resourceNode = node.GetComponent<ResourceNode>();
-            if (resourceNode != null && !resourceNode.IsDepeleted())
-            {
-                StartGathering(resourceNode.gameObject);
-                break;
-            }
-        }
-    }
-
-    private void StartGathering(GameObject node)
-    {
-        isGathering = true;
-        gatherProgress = 0f;
-        currentResourceNode = node;
-
-        if (GuiderMessageUI.Instance != null)
-        {
-            GuiderMessageUI.Instance.ShowMessage("Gathering resource...");
-        }
-    }
-
-    private void UpdateGathering()
-    {
-        if (currentResourceNode == null)
-        {
-            CancelGathering();
-            return;
-        }
-
-        // Check if still in range
-        float distance = Vector3.Distance(transform.position, currentResourceNode.transform.position);
-        if (distance > gatherRange)
-        {
-            CancelGathering();
-            return;
-        }
-
-        // Progress gathering
-        gatherProgress += Time.deltaTime * gatherSpeed;
-        
-        if (gatherProgress >= 1f)
-        {
-            CompleteGathering();
-        }
-    }
-
-    private void CompleteGathering()
-    {
-        ResourceNode node = currentResourceNode.GetComponent<ResourceNode>();
-        if (node != null)
-        {
-            // Get resource from node
-            Resource gatheredResource = node.GatherResource();
-            
-            if (gatheredResource != null)
-            {
-                // Add to inventory
-                AddResource(gatheredResource.name, gatheredResource.quantity);
-                
-                // Grant consciousness experience
-                GrantConsciousnessExperience(gatheredResource);
-
-                if (GuiderMessageUI.Instance != null)
+                resources[resource.type] = new ResourceData
                 {
-                    GuiderMessageUI.Instance.ShowMessage($"Gathered {gatheredResource.quantity} {gatheredResource.name}");
-                }
+                    type = resource.type,
+                    amount = resource.amount,
+                    maxAmount = resource.maxAmount,
+                    icon = resource.icon
+                };
             }
         }
 
-        isGathering = false;
-        gatherProgress = 0f;
-        currentResourceNode = null;
-    }
-
-    private void CancelGathering()
-    {
-        if (GuiderMessageUI.Instance != null)
+        public void AddResource(string type, int amount)
         {
-            GuiderMessageUI.Instance.ShowMessage("Gathering cancelled");
+            if (amount <= 0)
+                return;
+
+            // Create resource type if it doesn't exist
+            if (!resources.ContainsKey(type))
+            {
+                resources[type] = new ResourceData
+                {
+                    type = type,
+                    amount = 0,
+                    maxAmount = 999,
+                    icon = null
+                };
+            }
+
+            var resource = resources[type];
+            int newAmount = Mathf.Min(resource.amount + amount, resource.maxAmount);
+            resource.amount = newAmount;
+
+            // Notify listeners
+            onResourceChanged?.Invoke(type, newAmount);
+
+            // Check if maxed
+            if (newAmount >= resource.maxAmount)
+            {
+                onResourceMaxed?.Invoke(type);
+            }
         }
 
-        isGathering = false;
-        gatherProgress = 0f;
-        currentResourceNode = null;
-    }
-
-    public void AddResource(string resourceName, float amount)
-    {
-        if (inventory.ContainsKey(resourceName))
+        public bool UseResource(string type, int amount)
         {
-            inventory[resourceName].quantity = Mathf.Min(
-                inventory[resourceName].quantity + amount,
-                inventory[resourceName].maxStack
-            );
-        }
-    }
+            if (!resources.ContainsKey(type) || amount <= 0)
+                return false;
 
-    public bool UseResource(string resourceName, float amount)
-    {
-        if (inventory.ContainsKey(resourceName) && inventory[resourceName].quantity >= amount)
-        {
-            inventory[resourceName].quantity -= amount;
+            var resource = resources[type];
+            if (resource.amount < amount)
+                return false;
+
+            resource.amount -= amount;
+            onResourceChanged?.Invoke(type, resource.amount);
             return true;
         }
-        return false;
-    }
 
-    private void GrantConsciousnessExperience(Resource resource)
-    {
-        NeuralNetwork network = GetComponent<NeuralNetwork>();
-        if (network != null)
+        public int GetResourceAmount(string type)
         {
-            float experience = resource.consciousnessValue;
-            network.GainExperience(experience);
+            return resources.ContainsKey(type) ? resources[type].amount : 0;
+        }
 
-            // Special development based on resource type
-            switch (resource.type)
+        public bool HasResource(string type, int amount)
+        {
+            return resources.ContainsKey(type) && resources[type].amount >= amount;
+        }
+
+        public Sprite GetResourceIcon(string type)
+        {
+            return resources.ContainsKey(type) ? resources[type].icon : null;
+        }
+
+        public List<string> GetAllResourceTypes()
+        {
+            return new List<string>(resources.Keys);
+        }
+
+        public void ClearResources()
+        {
+            foreach (var resource in resources.Values)
             {
-                case ResourceType.Pure:
-                    network.DevelopNode("Emotional Intelligence", experience * 0.5f);
-                    break;
-                case ResourceType.Rare:
-                    network.DevelopNode("Critical Thinking", experience * 0.5f);
-                    break;
-                case ResourceType.Energy:
-                    network.DevelopNode("Creative Expression", experience * 0.5f);
-                    break;
+                resource.amount = 0;
+                onResourceChanged?.Invoke(resource.type, 0);
             }
         }
-    }
 
-    public float GetResourceAmount(string resourceName)
-    {
-        if (inventory.ContainsKey(resourceName))
+        public bool IsResourceMaxed(string type)
         {
-            return inventory[resourceName].quantity;
+            return resources.ContainsKey(type) && resources[type].amount >= resources[type].maxAmount;
         }
-        return 0f;
-    }
-
-    public Dictionary<string, Resource> GetInventory()
-    {
-        return inventory;
-    }
-
-    public float GetGatherProgress()
-    {
-        return gatherProgress;
-    }
-
-    void OnDrawGizmosSelected()
-    {
-        // Draw gather range
-        Gizmos.color = Color.cyan;
-        Gizmos.DrawWireSphere(transform.position, gatherRange);
     }
 }

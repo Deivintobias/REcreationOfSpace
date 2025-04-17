@@ -1,56 +1,76 @@
 using UnityEngine;
 
-public class CombatController : MonoBehaviour
+namespace REcreationOfSpace.Combat
 {
-    [Header("Attack Settings")]
-    public float attackDamage = 20f;
-    public float attackRange = 2f;
-    public float attackCooldown = 0.5f;
-    public LayerMask enemyLayer;
-
-    private float nextAttackTime;
-    private PlayerController playerController;
-
-    private void Start()
+    public class CombatController : MonoBehaviour
     {
-        playerController = GetComponent<PlayerController>();
-    }
+        [Header("Combat Settings")]
+        [SerializeField] private float attackRange = 2f;
+        [SerializeField] private float attackCooldown = 0.5f;
+        [SerializeField] private int attackDamage = 10;
+        [SerializeField] private LayerMask attackableLayers;
 
-    private void Update()
-    {
-        // Check for attack input (left mouse button)
-        if (Input.GetMouseButtonDown(0) && Time.time >= nextAttackTime)
+        [Header("Effects")]
+        [SerializeField] private ParticleSystem attackEffect;
+        [SerializeField] private AudioClip attackSound;
+
+        private float lastAttackTime;
+        private AudioSource audioSource;
+        private Health health;
+
+        private void Awake()
         {
-            PerformAttack();
-        }
-    }
-
-    private void PerformAttack()
-    {
-        nextAttackTime = Time.time + attackCooldown;
-
-        // Create a sphere cast to detect enemies in range
-        Collider[] hitColliders = Physics.OverlapSphere(transform.position, attackRange, enemyLayer);
-
-        foreach (var hitCollider in hitColliders)
-        {
-            // Check if the hit object has a Health component
-            Health enemyHealth = hitCollider.GetComponent<Health>();
-            if (enemyHealth != null)
+            audioSource = GetComponent<AudioSource>();
+            if (audioSource == null && attackSound != null)
             {
-                // Apply damage
-                enemyHealth.TakeDamage(attackDamage);
+                audioSource = gameObject.AddComponent<AudioSource>();
+            }
+
+            health = GetComponent<Health>();
+        }
+
+        public void Attack()
+        {
+            if (Time.time - lastAttackTime < attackCooldown)
+                return;
+
+            lastAttackTime = Time.time;
+
+            // Play effects
+            if (attackEffect != null)
+                attackEffect.Play();
+
+            if (audioSource != null && attackSound != null)
+                audioSource.PlayOneShot(attackSound);
+
+            // Check for hits
+            Collider[] hits = Physics.OverlapSphere(transform.position, attackRange, attackableLayers);
+            foreach (var hit in hits)
+            {
+                // Don't damage self
+                if (hit.gameObject == gameObject)
+                    continue;
+
+                var targetHealth = hit.GetComponent<Health>();
+                if (targetHealth != null)
+                {
+                    targetHealth.TakeDamage(attackDamage);
+                }
+
+                // Handle enemy AI response
+                var enemy = hit.GetComponent<EnemyAI>();
+                if (enemy != null)
+                {
+                    enemy.OnAttacked(gameObject);
+                }
             }
         }
 
-        // Here you could trigger attack animation
-        // animator.SetTrigger("Attack");
-    }
-
-    // Helper method to visualize attack range in editor
-    private void OnDrawGizmosSelected()
-    {
-        Gizmos.color = Color.red;
-        Gizmos.DrawWireSphere(transform.position, attackRange);
+        private void OnDrawGizmosSelected()
+        {
+            // Visualize attack range in editor
+            Gizmos.color = Color.red;
+            Gizmos.DrawWireSphere(transform.position, attackRange);
+        }
     }
 }

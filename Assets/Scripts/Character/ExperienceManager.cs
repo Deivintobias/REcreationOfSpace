@@ -1,132 +1,102 @@
 using UnityEngine;
+using UnityEngine.Events;
 
-public class ExperienceManager : MonoBehaviour
+namespace REcreationOfSpace.Character
 {
-    [Header("Experience Settings")]
-    public float combatExpMultiplier = 1f;
-    public float explorationExpMultiplier = 1f;
-    public float creativeExpMultiplier = 1.5f;
-    public float socialExpMultiplier = 1.2f;
-    public float meditationExpMultiplier = 2f;
-
-    [Header("Node Development Settings")]
-    [Tooltip("Which nodes benefit most from which activities")]
-    public string[] combatNodes = { "Basic Consciousness", "Self Awareness" };
-    public string[] explorationNodes = { "Critical Thinking", "Self Awareness" };
-    public string[] creativeNodes = { "Creative Expression", "Emotional Intelligence" };
-    public string[] socialNodes = { "Emotional Intelligence", "Self Awareness" };
-    public string[] meditationNodes = { "True Freedom", "Critical Thinking" };
-
-    private NeuralNetwork neuralNetwork;
-
-    private void Start()
+    public class ExperienceManager : MonoBehaviour
     {
-        neuralNetwork = GetComponent<NeuralNetwork>();
-        if (neuralNetwork == null)
+        [Header("Experience Settings")]
+        [SerializeField] private int experienceToLevel = 100;
+        [SerializeField] private float experienceMultiplier = 1.5f;
+        [SerializeField] private int maxLevel = 50;
+
+        [Header("Level Up Effects")]
+        [SerializeField] private ParticleSystem levelUpEffect;
+        [SerializeField] private AudioClip levelUpSound;
+
+        public UnityEvent<int> onLevelUp; // Current level
+        public UnityEvent<int, int> onExperienceGained; // Current XP, XP needed for next level
+
+        private int currentLevel = 1;
+        private int currentExperience = 0;
+        private AudioSource audioSource;
+        private Health health;
+
+        private void Awake()
         {
-            Debug.LogError("NeuralNetwork component not found!");
+            audioSource = GetComponent<AudioSource>();
+            if (audioSource == null && levelUpSound != null)
+            {
+                audioSource = gameObject.AddComponent<AudioSource>();
+            }
+
+            health = GetComponent<Health>();
         }
-    }
 
-    // Combat experience from defeating enemies or surviving battles
-    public void GainCombatExperience(float baseAmount)
-    {
-        if (neuralNetwork == null) return;
-
-        float experience = baseAmount * combatExpMultiplier;
-        foreach (string nodeName in combatNodes)
+        public void GainExperience(int amount)
         {
-            neuralNetwork.DevelopNode(nodeName, experience);
+            if (currentLevel >= maxLevel)
+                return;
+
+            currentExperience += amount;
+            int experienceNeeded = GetExperienceForNextLevel();
+
+            // Notify UI
+            onExperienceGained?.Invoke(currentExperience, experienceNeeded);
+
+            // Check for level up
+            while (currentExperience >= experienceNeeded && currentLevel < maxLevel)
+            {
+                LevelUp();
+                experienceNeeded = GetExperienceForNextLevel();
+            }
         }
-        
-        // Small general development for all nodes
-        neuralNetwork.GainExperience(experience * 0.1f);
-    }
 
-    // Exploration experience from discovering new areas or collecting items
-    public void GainExplorationExperience(float baseAmount)
-    {
-        if (neuralNetwork == null) return;
-
-        float experience = baseAmount * explorationExpMultiplier;
-        foreach (string nodeName in explorationNodes)
+        private void LevelUp()
         {
-            neuralNetwork.DevelopNode(nodeName, experience);
+            currentLevel++;
+            currentExperience -= GetExperienceForNextLevel();
+
+            // Play effects
+            if (levelUpEffect != null)
+            {
+                levelUpEffect.Play();
+            }
+
+            if (audioSource != null && levelUpSound != null)
+            {
+                audioSource.PlayOneShot(levelUpSound);
+            }
+
+            // Increase max health
+            if (health != null)
+            {
+                // Heal to full and increase max health
+                health.Heal(999);
+            }
+
+            // Notify listeners
+            onLevelUp?.Invoke(currentLevel);
         }
-        
-        neuralNetwork.GainExperience(experience * 0.1f);
-    }
 
-    // Creative experience from crafting, building, or solving puzzles
-    public void GainCreativeExperience(float baseAmount)
-    {
-        if (neuralNetwork == null) return;
-
-        float experience = baseAmount * creativeExpMultiplier;
-        foreach (string nodeName in creativeNodes)
+        private int GetExperienceForNextLevel()
         {
-            neuralNetwork.DevelopNode(nodeName, experience);
+            return Mathf.RoundToInt(experienceToLevel * Mathf.Pow(experienceMultiplier, currentLevel - 1));
         }
-        
-        neuralNetwork.GainExperience(experience * 0.15f);
-    }
 
-    // Social experience from interacting with NPCs or other players
-    public void GainSocialExperience(float baseAmount)
-    {
-        if (neuralNetwork == null) return;
-
-        float experience = baseAmount * socialExpMultiplier;
-        foreach (string nodeName in socialNodes)
+        public int GetCurrentLevel()
         {
-            neuralNetwork.DevelopNode(nodeName, experience);
+            return currentLevel;
         }
-        
-        neuralNetwork.GainExperience(experience * 0.12f);
-    }
 
-    // Meditation experience from quiet contemplation or spiritual activities
-    public void GainMeditationExperience(float baseAmount)
-    {
-        if (neuralNetwork == null) return;
-
-        float experience = baseAmount * meditationExpMultiplier;
-        foreach (string nodeName in meditationNodes)
+        public float GetLevelProgress()
         {
-            neuralNetwork.DevelopNode(nodeName, experience);
+            return (float)currentExperience / GetExperienceForNextLevel();
         }
-        
-        neuralNetwork.GainExperience(experience * 0.2f);
-    }
 
-    // Special milestone experience for major achievements
-    public void GainMilestoneExperience(float baseAmount, string primaryNode)
-    {
-        if (neuralNetwork == null) return;
-
-        // Major boost to specific node
-        neuralNetwork.DevelopNode(primaryNode, baseAmount * 2f);
-        
-        // Moderate boost to all nodes
-        neuralNetwork.GainExperience(baseAmount);
-    }
-
-    // Experience from dying and respawning at the epicenter
-    public void GainDeathExperience()
-    {
-        if (neuralNetwork == null) return;
-
-        // Death provides unique insights into consciousness and self-awareness
-        neuralNetwork.DevelopNode("Basic Consciousness", 5f);
-        neuralNetwork.DevelopNode("Self Awareness", 7f);
-        
-        // Small development boost to all nodes from the experience
-        neuralNetwork.GainExperience(3f);
-    }
-
-    // Check if character has achieved true freedom
-    public bool HasAchievedTrueFreedom()
-    {
-        return neuralNetwork != null && neuralNetwork.GetNodeDevelopment("True Freedom") >= 100f;
+        public bool IsMaxLevel()
+        {
+            return currentLevel >= maxLevel;
+        }
     }
 }

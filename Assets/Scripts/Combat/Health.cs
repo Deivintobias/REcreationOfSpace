@@ -1,69 +1,106 @@
 using UnityEngine;
 using UnityEngine.Events;
 
-public class Health : MonoBehaviour
+namespace REcreationOfSpace.Combat
 {
-    [Header("Health Settings")]
-    public float maxHealth = 100f;
-    public float currentHealth;
-
-    public UnityEvent onDeath;
-    public UnityEvent<float> onHealthChanged;
-
-    private void Start()
+    public class Health : MonoBehaviour
     {
-        currentHealth = maxHealth;
-    }
+        [Header("Health Settings")]
+        [SerializeField] private int maxHealth = 100;
+        [SerializeField] private bool isInvulnerable = false;
 
-    public void TakeDamage(float damage)
-    {
-        currentHealth -= damage;
-        onHealthChanged?.Invoke(currentHealth);
+        [Header("Effects")]
+        [SerializeField] private ParticleSystem damageEffect;
+        [SerializeField] private AudioClip damageSound;
+        [SerializeField] private AudioClip deathSound;
 
-        if (currentHealth <= 0)
+        [Header("Events")]
+        public UnityEvent onDeath;
+        public UnityEvent<int, int> onHealthChanged; // current, max
+
+        private int currentHealth;
+        private AudioSource audioSource;
+        private bool isDead = false;
+
+        private void Awake()
         {
-            Die();
-        }
-    }
+            currentHealth = maxHealth;
 
-    public void Heal(float amount)
-    {
-        currentHealth = Mathf.Min(currentHealth + amount, maxHealth);
-        onHealthChanged?.Invoke(currentHealth);
-    }
-
-    private void Die()
-    {
-        onDeath?.Invoke();
-
-        // Handle player death differently from other entities
-        if (gameObject.CompareTag("Player"))
-        {
-            // Disable player controls during death sequence
-            PlayerController playerController = GetComponent<PlayerController>();
-            if (playerController != null)
+            audioSource = GetComponent<AudioSource>();
+            if (audioSource == null && (damageSound != null || deathSound != null))
             {
-                playerController.enabled = false;
+                audioSource = gameObject.AddComponent<AudioSource>();
             }
 
-            // Handle respawn through RespawnManager
-            RespawnManager.Instance?.HandlePlayerDeath(gameObject);
+            // Notify UI of initial health
+            onHealthChanged?.Invoke(currentHealth, maxHealth);
         }
-        else
+
+        public void TakeDamage(int damage)
         {
-            // Non-player entities are destroyed
-            Destroy(gameObject);
+            if (isInvulnerable || isDead || damage <= 0)
+                return;
+
+            currentHealth = Mathf.Max(0, currentHealth - damage);
+
+            // Play effects
+            if (damageEffect != null)
+                damageEffect.Play();
+
+            if (audioSource != null && damageSound != null)
+                audioSource.PlayOneShot(damageSound);
+
+            // Notify UI of health change
+            onHealthChanged?.Invoke(currentHealth, maxHealth);
+
+            // Check for death
+            if (currentHealth <= 0 && !isDead)
+            {
+                Die();
+            }
         }
-    }
 
-    public void ResetHealth()
-    {
-        currentHealth = maxHealth;
-        onHealthChanged?.Invoke(currentHealth);
-    }
+        public void Heal(int amount)
+        {
+            if (isDead || amount <= 0)
+                return;
 
-    public float GetHealthPercentage()
-    {
-        return currentHealth / maxHealth;
+            currentHealth = Mathf.Min(maxHealth, currentHealth + amount);
+            onHealthChanged?.Invoke(currentHealth, maxHealth);
+        }
+
+        private void Die()
+        {
+            isDead = true;
+
+            // Play death sound
+            if (audioSource != null && deathSound != null)
+                audioSource.PlayOneShot(deathSound);
+
+            // Notify listeners
+            onDeath?.Invoke();
+
+            // Handle respawn if applicable
+            var respawnManager = GetComponent<RespawnManager>();
+            if (respawnManager != null)
+            {
+                respawnManager.OnDeath();
+            }
+            else
+            {
+                // If no respawn manager, destroy the object
+                Destroy(gameObject, deathSound != null ? deathSound.length : 0f);
+            }
+        }
+
+        public float GetHealthPercentage()
+        {
+            return (float)currentHealth / maxHealth;
+        }
+
+        public bool IsDead()
+        {
+            return isDead;
+        }
     }
 }

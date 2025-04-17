@@ -1,98 +1,166 @@
-# REcreation Of Space
+# Diablo-Style RPG with Farming and Crafting
 
-A unique top-down game exploring consciousness, freedom, and resource management in a world divided between Sion and Sinai territories.
+A top-down RPG that combines combat mechanics with farming and crafting systems, built in Unity.
 
-## 🌟 Core Concept
+## Features
 
-REcreation Of Space is a philosophical game where players navigate between different territories:
-- **Sion's Crust**: The surface layer of the first planet
-- **Paradise City**: A Sinai sanctuary at the planet's epicenter
-- **Sinai Space**: The vast expanse beyond the crust
+### Core Systems
+- Procedural world generation with biomes
+- Biblical timeline from Creation to 2025
+- Historical locations and events
+- Resource gathering and management
+- Enemy AI with patrolling and combat behaviors
+- Experience and leveling system
+- Team system for character management
 
-## 🎮 Features
+### Farming System
+- Placeable farm plots
+- Multiple crop types with growth stages
+- Watering and fertilizing mechanics
+- Crop harvesting and resource generation
 
-- **Neural Network Development**: Grow consciousness through experiences
-- **Resource System**: Gather and manage natural resources
-- **Trading System**: Exchange items with other characters
-- **Team System**: Form groups and share knowledge
-- **World Layers**: Navigate between different territories
-- **Consciousness Growth**: Develop through various interactions
+### Crafting System
+- Multiple workbench types (Basic, Smithy, Alchemy)
+- Progressive crafting recipes
+- Crafting skill leveling
+- Resource requirements and crafting times
 
-## 🚀 Getting Started
+### Character System
+- Multiple character classes
+- Equipment slots (weapons, armor, accessories, tools)
+- Skill progression for different activities
+- Character stats and attributes
 
-### Prerequisites
-- Unity 2022.3 or later
-- Basic understanding of Unity's HDRP
+### Menu Systems
+- Main menu with save/load functionality
+- In-game pause menu
+- Character menu with stats and equipment
+- Settings menu with audio and graphics options
 
-### Installation
+## Controls
+
+### Basic Movement
+- WASD - Move character
+- Mouse - Rotate camera
+- Left Click - Attack
+- Space - Dodge/Roll
+
+### Interaction Controls
+- E - Interact with objects/NPCs
+- Q - Plow farm plot
+- R - Water farm plot
+- F - Plant crop
+- G - Harvest crop
+
+### Menu Controls
+- ESC - Toggle pause menu
+- C - Toggle character menu
+- I - Toggle inventory
+- M - Toggle map
+
+## Development Setup
+
 1. Clone the repository
 ```bash
-git clone https://github.com/yourusername/recreation-of-space.git
+git clone https://github.com/yourusername/your-repo-name.git
 ```
+
 2. Open the project in Unity
-3. Open the OutdoorsScene
-4. Press Play to test
+- Unity version: 2022.x or later
+- Universal Render Pipeline (URP)
 
-## 🎯 How to Play
+3. Open the MainMenu scene
+- Located in Assets/Scenes/MainMenu
+- Press Play to start testing
 
-- **WASD**: Move character
-- **F**: Gather resources
-- **I**: Toggle inventory
-- **T**: Trade with others
-- **G**: Form/join teams
-- **Tab**: View neural network
+4. Scene Structure
+- MainMenu scene - Game entry point
+- OutdoorsScene - Main gameplay area
 
-## 🌍 World Structure
+### World Generation
+- Chunk-based terrain generation
+- Multiple biomes (Ocean, Beach, Plains, Forest, Mountain, Desert)
+- Dynamic terrain features (mountains, plateaus, valleys, rivers)
+- Temperature and moisture-based environment
+- Era-specific environmental changes
 
-1. **Sion's Territory**
-   - First Earth Crust (surface layer)
-   - Natural resources
-   - Starting location
+### Visual Effects
+- Era-specific visual settings
+  * Creation era: Bright, ethereal atmosphere
+  * Great Flood era: Dark, stormy environment
+  * Modern era: Realistic lighting and effects
+- Dynamic weather systems (rain, snow, dust storms)
+- Divine effects for biblical events
+- Biome-specific atmospheric effects
+- Ambient sound system for each environment
+- Advanced post-processing effects
 
-2. **Sinai's Territory**
-   - Paradise City (epicenter)
-   - All space beyond the crust
-   - Sacred sanctuary
+### Historical Timeline
+- Interactive timeline UI (T key)
+- Biblical eras with historical events
+- Scripture references and descriptions
+- Historical locations with information displays
+- Modern era technology (2025)
 
-3. **Resources**
-   - Wood
-   - Crystal
-   - Water
-   - Stone
-   - Energy (rare)
+## Project Structure
 
-## 🤝 Contributing
+```
+Assets/
+├── Scripts/
+│   ├── Setup/           # Game initialization and setup
+│   ├── Player/          # Player controls and mechanics
+│   ├── Combat/          # Combat system
+│   ├── Farming/         # Farming mechanics
+│   ├── Crafting/        # Crafting system
+│   ├── Character/       # Character stats and progression
+│   ├── UI/              # User interface elements
+│   ├── World/          
+│   │   ├── ChunkManager.cs     # Chunk-based world generation
+│   │   ├── BiomeManager.cs     # Biome and terrain features
+│   │   ├── Timeline.cs         # Historical timeline system
+│   │   ├── HistoricalInfo.cs   # Historical location data
+│   │   └── WorldManager.cs     # World state management
+│   └── Resources/       # Resource system
+├── Scenes/
+│   ├── MainMenu.unity
+│   └── OutdoorsScene.unity
+└── Prefabs/             # Reusable game objects
+```
 
-We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
+## Adding New Features
 
-## 📝 License
+### Adding a New Crop Type
+1. Open GameSetup.cs
+2. Add new crop data to SetupCropTypes()
+3. Create growth stage prefabs
+4. Add required resources
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+### Adding a New Crafting Recipe
+1. Open GameSetup.cs
+2. Add recipe to SetupCraftingRecipes()
+3. Define resource requirements
+4. Set crafting time and level requirement
 
-## 🎨 Art Style
+### Adding a New Character Class
+1. Open CharacterMenu.cs
+2. Add class definition to CharacterClass array
+3. Set stat multipliers and bonuses
+4. Create class icon
 
-The game uses a minimalist art style with:
-- Color-coded territories
-- Particle effects
-- Glowing resources
-- Distinct visual layers
+## Contributing
 
-## 🔮 Future Plans
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
 
-- Meditation system
-- Knowledge libraries
-- Underground networks
-- Weather systems
-- Sacred artifacts
-- Community centers
-- Consciousness events
+## License
 
-## 📚 Documentation
+This project is licensed under the MIT License - see the LICENSE file for details.
 
-- [Code Structure](docs/CODE_STRUCTURE.md)
-- [Game Design](docs/GAME_DESIGN.md)
-- [Technical Overview](docs/TECHNICAL.md)
+## Acknowledgments
 
-## ✨ Credits
-
-Created with love for exploring consciousness and freedom.
+- Unity Technologies
+- Asset creators (list specific assets used)
+- Community contributors

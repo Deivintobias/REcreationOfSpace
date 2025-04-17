@@ -1,246 +1,158 @@
 using UnityEngine;
+using UnityEngine.Events;
 using System.Collections.Generic;
 
-public class TradingSystem : MonoBehaviour
+namespace REcreationOfSpace.Character
 {
-    [System.Serializable]
-    public class TradeItem
+    public class TradingSystem : MonoBehaviour
     {
-        public string itemName;
-        public ItemType type;
-        public float neuralValue; // How much this item contributes to neural development
-        public string description;
-    }
-
-    public enum ItemType
-    {
-        Knowledge,    // Hidden texts, teachings
-        Resource,     // Farming materials, building supplies
-        Tool,         // Farming tools, meditation aids
-        Artifact      // Special items that boost neural development
-    }
-
-    [Header("Trading Settings")]
-    public float tradeRange = 5f;
-    public float safeTradeDuration = 3f;
-    public LayerMask traderMask;
-
-    private List<TradeItem> inventory = new List<TradeItem>();
-    private bool isTrading = false;
-    private float tradeProgress = 0f;
-    private TradingSystem currentTradePartner;
-
-    // Example trade items
-    private static readonly TradeItem[] availableItems = new TradeItem[]
-    {
-        new TradeItem {
-            itemName = "Hidden Scripture",
-            type = ItemType.Knowledge,
-            neuralValue = 15f,
-            description = "Ancient wisdom passed down in secret"
-        },
-        new TradeItem {
-            itemName = "Meditation Crystal",
-            type = ItemType.Tool,
-            neuralValue = 10f,
-            description = "Enhances meditation practice"
-        },
-        new TradeItem {
-            itemName = "Truth Fragment",
-            type = ItemType.Artifact,
-            neuralValue = 20f,
-            description = "A piece of pure truth"
-        },
-        new TradeItem {
-            itemName = "Sacred Seeds",
-            type = ItemType.Resource,
-            neuralValue = 5f,
-            description = "Special seeds for conscious farming"
-        }
-    };
-
-    void Start()
-    {
-        // Add some initial items
-        AddRandomItems(2);
-    }
-
-    void Update()
-    {
-        if (isTrading)
+        [System.Serializable]
+        public class TradeItem
         {
-            UpdateTradeProgress();
+            public string itemType;
+            public int amount;
+            public int price;
+            public bool isSelling; // true = NPC sells, false = NPC buys
         }
 
-        // Check for trade initiation
-        if (Input.GetKeyDown(KeyCode.T))
-        {
-            TryInitiateTrade();
-        }
-    }
+        [Header("Trading Settings")]
+        [SerializeField] private List<TradeItem> availableItems = new List<TradeItem>();
+        [SerializeField] private float priceFluctuation = 0.2f;
+        [SerializeField] private float restockTime = 300f; // 5 minutes
 
-    private void AddRandomItems(int count)
-    {
-        for (int i = 0; i < count; i++)
-        {
-            inventory.Add(availableItems[Random.Range(0, availableItems.Length)]);
-        }
-    }
+        [Header("UI Events")]
+        public UnityEvent onTradeStart;
+        public UnityEvent onTradeEnd;
+        public UnityEvent<TradeItem> onItemTraded;
 
-    private void TryInitiateTrade()
-    {
-        // Find potential trade partners
-        Collider[] nearbyTraders = Physics.OverlapSphere(transform.position, tradeRange, traderMask);
-        
-        foreach (var trader in nearbyTraders)
+        private ResourceSystem resourceSystem;
+        private Dictionary<string, float> restockTimers = new Dictionary<string, float>();
+        private bool isTrading = false;
+
+        private void Start()
         {
-            TradingSystem otherTrader = trader.GetComponent<TradingSystem>();
-            if (otherTrader != null && otherTrader != this)
+            resourceSystem = FindObjectOfType<ResourceSystem>();
+
+            // Initialize restock timers
+            foreach (var item in availableItems)
             {
-                InitiateTrade(otherTrader);
-                break;
+                if (item.isSelling)
+                {
+                    restockTimers[item.itemType] = 0f;
+                }
             }
         }
-    }
 
-    private void InitiateTrade(TradingSystem other)
-    {
-        // Check if both traders are Sinai characters
-        SinaiCharacter thisSinai = GetComponent<SinaiCharacter>();
-        SinaiCharacter otherSinai = other.GetComponent<SinaiCharacter>();
-
-        if (thisSinai != null && otherSinai != null)
+        private void Update()
         {
+            // Handle restocking
+            foreach (var timer in new Dictionary<string, float>(restockTimers))
+            {
+                if (restockTimers[timer.Key] > 0)
+                {
+                    restockTimers[timer.Key] -= Time.deltaTime;
+                    if (restockTimers[timer.Key] <= 0)
+                    {
+                        RestockItem(timer.Key);
+                    }
+                }
+            }
+        }
+
+        public void StartTrading()
+        {
+            if (isTrading)
+                return;
+
             isTrading = true;
-            currentTradePartner = other;
-            tradeProgress = 0f;
-
-            // Notify UI
-            if (GuiderMessageUI.Instance != null)
-            {
-                GuiderMessageUI.Instance.ShowMessage("Beginning safe trade...");
-            }
-
-            // Start trade on other end
-            other.AcceptTrade(this);
+            onTradeStart?.Invoke();
         }
-    }
 
-    public void AcceptTrade(TradingSystem initiator)
-    {
-        isTrading = true;
-        currentTradePartner = initiator;
-        tradeProgress = 0f;
-    }
-
-    private void UpdateTradeProgress()
-    {
-        if (currentTradePartner == null)
+        public void EndTrading()
         {
-            CancelTrade();
-            return;
+            if (!isTrading)
+                return;
+
+            isTrading = false;
+            onTradeEnd?.Invoke();
         }
 
-        // Check if traders are still in range
-        float distance = Vector3.Distance(transform.position, currentTradePartner.transform.position);
-        if (distance > tradeRange)
+        public bool TryBuyItem(string itemType)
         {
-            CancelTrade();
-            return;
+            if (!isTrading || resourceSystem == null)
+                return false;
+
+            var item = availableItems.Find(i => i.itemType == itemType && i.isSelling);
+            if (item == null)
+                return false;
+
+            // Check if item is in stock
+            if (restockTimers.ContainsKey(itemType) && restockTimers[itemType] > 0)
+                return false;
+
+            // Check if player has enough resources
+            if (!resourceSystem.HasResource("Gold", item.price))
+                return false;
+
+            // Process transaction
+            resourceSystem.UseResource("Gold", item.price);
+            resourceSystem.AddResource(item.itemType, item.amount);
+
+            // Start restock timer
+            restockTimers[itemType] = restockTime;
+
+            onItemTraded?.Invoke(item);
+            return true;
         }
 
-        // Progress the trade
-        tradeProgress += Time.deltaTime;
-        
-        // Check for completion
-        if (tradeProgress >= safeTradeDuration)
+        public bool TrySellItem(string itemType, int amount)
         {
-            CompleteTrade();
+            if (!isTrading || resourceSystem == null)
+                return false;
+
+            var item = availableItems.Find(i => i.itemType == itemType && !i.isSelling);
+            if (item == null)
+                return false;
+
+            // Check if player has enough of the item
+            if (!resourceSystem.HasResource(itemType, amount))
+                return false;
+
+            // Calculate sell price with random fluctuation
+            float priceModifier = 1f + Random.Range(-priceFluctuation, priceFluctuation);
+            int sellPrice = Mathf.RoundToInt(item.price * amount * priceModifier);
+
+            // Process transaction
+            resourceSystem.UseResource(itemType, amount);
+            resourceSystem.AddResource("Gold", sellPrice);
+
+            onItemTraded?.Invoke(item);
+            return true;
         }
-    }
 
-    private void CompleteTrade()
-    {
-        if (currentTradePartner == null) return;
-
-        // Exchange random items
-        if (inventory.Count > 0 && currentTradePartner.inventory.Count > 0)
+        private void RestockItem(string itemType)
         {
-            TradeItem myItem = inventory[Random.Range(0, inventory.Count)];
-            TradeItem theirItem = currentTradePartner.inventory[Random.Range(0, currentTradePartner.inventory.Count)];
-
-            // Remove items
-            inventory.Remove(myItem);
-            currentTradePartner.inventory.Remove(theirItem);
-
-            // Add exchanged items
-            inventory.Add(theirItem);
-            currentTradePartner.inventory.Add(myItem);
-
-            // Grant neural network experience
-            GrantTradeExperience(myItem, theirItem);
+            restockTimers[itemType] = 0f;
         }
 
-        // Notify UI
-        if (GuiderMessageUI.Instance != null)
+        public List<TradeItem> GetAvailableItems()
         {
-            GuiderMessageUI.Instance.ShowMessage("Trade completed successfully!");
+            return new List<TradeItem>(availableItems);
         }
 
-        // Reset trade state
-        isTrading = false;
-        currentTradePartner = null;
-        tradeProgress = 0f;
-    }
-
-    private void CancelTrade()
-    {
-        if (GuiderMessageUI.Instance != null)
+        public bool IsItemInStock(string itemType)
         {
-            GuiderMessageUI.Instance.ShowMessage("Trade cancelled - traders separated");
+            return !restockTimers.ContainsKey(itemType) || restockTimers[itemType] <= 0;
         }
 
-        isTrading = false;
-        currentTradePartner = null;
-        tradeProgress = 0f;
-    }
-
-    private void GrantTradeExperience(TradeItem given, TradeItem received)
-    {
-        NeuralNetwork network = GetComponent<NeuralNetwork>();
-        if (network != null)
+        public float GetRestockTime(string itemType)
         {
-            // Calculate experience based on items exchanged
-            float experience = (given.neuralValue + received.neuralValue) * 0.5f;
-            network.GainExperience(experience);
-
-            // Special boost for knowledge exchange
-            if (given.type == ItemType.Knowledge && received.type == ItemType.Knowledge)
-            {
-                network.DevelopNode("Critical Thinking", experience * 0.5f);
-            }
+            return restockTimers.ContainsKey(itemType) ? restockTimers[itemType] : 0f;
         }
-    }
 
-    public List<TradeItem> GetInventory()
-    {
-        return inventory;
-    }
-
-    public bool IsTrading()
-    {
-        return isTrading;
-    }
-
-    public float GetTradeProgress()
-    {
-        return tradeProgress / safeTradeDuration;
-    }
-
-    void OnDrawGizmosSelected()
-    {
-        // Draw trade range
-        Gizmos.color = Color.yellow;
-        Gizmos.DrawWireSphere(transform.position, tradeRange);
+        public bool IsTrading()
+        {
+            return isTrading;
+        }
     }
 }

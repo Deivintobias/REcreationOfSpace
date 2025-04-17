@@ -1,227 +1,218 @@
 using UnityEngine;
+using UnityEngine.Events;
 using System.Collections.Generic;
 
-public class TeamSystem : MonoBehaviour
+namespace REcreationOfSpace.Character
 {
-    [System.Serializable]
-    public class TeamMember
+    public class TeamSystem : MonoBehaviour
     {
-        public GameObject character;
-        public float contributionScore;
-        public float trustLevel;
-        public List<string> sharedKnowledge;
+        [Header("Team Settings")]
+        [SerializeField] private int maxTeamSize = 4;
+        [SerializeField] private float teamRadius = 5f;
+        [SerializeField] private bool isTeamLeader = false;
 
-        public TeamMember(GameObject chr)
+        [Header("UI Events")]
+        public UnityEvent<GameObject> onMemberJoined;
+        public UnityEvent<GameObject> onMemberLeft;
+        public UnityEvent<GameObject> onLeaderChanged;
+
+        private List<GameObject> teamMembers = new List<GameObject>();
+        private GameObject teamLeader;
+        private bool hasTeam = false;
+
+        private void Start()
         {
-            character = chr;
-            contributionScore = 0f;
-            trustLevel = 0.1f;
-            sharedKnowledge = new List<string>();
-        }
-    }
-
-    [Header("Team Settings")]
-    public float maxTeamSize = 4f;
-    public float teamRadius = 15f;
-    public float trustGainRate = 0.1f;
-    public float knowledgeSharingInterval = 5f;
-    public LayerMask teamMemberMask;
-
-    private List<TeamMember> teamMembers = new List<TeamMember>();
-    private float lastKnowledgeShare;
-    private bool isTeamLeader;
-
-    private NeuralNetwork neuralNetwork;
-    private TradingSystem tradingSystem;
-
-    void Start()
-    {
-        neuralNetwork = GetComponent<NeuralNetwork>();
-        tradingSystem = GetComponent<TradingSystem>();
-        lastKnowledgeShare = Time.time;
-    }
-
-    void Update()
-    {
-        if (isTeamLeader)
-        {
-            ManageTeam();
-        }
-
-        // Knowledge sharing timer
-        if (Time.time - lastKnowledgeShare >= knowledgeSharingInterval)
-        {
-            ShareKnowledgeWithTeam();
-            lastKnowledgeShare = Time.time;
-        }
-
-        // Team formation input
-        if (Input.GetKeyDown(KeyCode.G))
-        {
-            TryFormTeam();
-        }
-    }
-
-    private void TryFormTeam()
-    {
-        if (teamMembers.Count > 0) return; // Already in a team
-
-        // Find nearby potential team members
-        Collider[] nearbyCharacters = Physics.OverlapSphere(transform.position, teamRadius, teamMemberMask);
-        
-        foreach (var character in nearbyCharacters)
-        {
-            TeamSystem otherTeam = character.GetComponent<TeamSystem>();
-            if (otherTeam != null && otherTeam != this && !otherTeam.IsInTeam())
+            if (isTeamLeader)
             {
-                // Check if both are Sinai characters
-                if (IsSinaiCharacter(gameObject) && IsSinaiCharacter(character.gameObject))
+                CreateTeam();
+            }
+        }
+
+        private void Update()
+        {
+            if (hasTeam && teamLeader == gameObject)
+            {
+                // Update team member positions
+                UpdateTeamFormation();
+            }
+        }
+
+        public void CreateTeam()
+        {
+            if (hasTeam)
+                return;
+
+            teamLeader = gameObject;
+            teamMembers.Clear();
+            teamMembers.Add(gameObject);
+            hasTeam = true;
+
+            onLeaderChanged?.Invoke(teamLeader);
+        }
+
+        public void RequestJoinTeam()
+        {
+            if (!hasTeam)
+            {
+                // Create new team if not in one
+                CreateTeam();
+                return;
+            }
+
+            // Find nearby team leader
+            Collider[] colliders = Physics.OverlapSphere(transform.position, teamRadius);
+            foreach (var collider in colliders)
+            {
+                var otherTeam = collider.GetComponent<TeamSystem>();
+                if (otherTeam != null && otherTeam.IsTeamLeader() && otherTeam.CanAcceptMember())
                 {
-                    InitiateTeam(otherTeam);
+                    otherTeam.AddMember(gameObject);
                     break;
                 }
             }
         }
-    }
 
-    private bool IsSinaiCharacter(GameObject character)
-    {
-        return character.GetComponent<SinaiCharacter>() != null;
-    }
-
-    private void InitiateTeam(TeamSystem other)
-    {
-        isTeamLeader = true;
-        AddTeamMember(other.gameObject);
-        other.JoinTeam(this);
-
-        if (GuiderMessageUI.Instance != null)
+        public void LeaveTeam()
         {
-            GuiderMessageUI.Instance.ShowMessage("Team formed! Press G near others to invite them.");
-        }
-    }
+            if (!hasTeam)
+                return;
 
-    public void JoinTeam(TeamSystem leader)
-    {
-        isTeamLeader = false;
-        teamMembers.Clear(); // Clear any existing team data
-        AddTeamMember(leader.gameObject);
-    }
-
-    private void AddTeamMember(GameObject member)
-    {
-        if (teamMembers.Count < maxTeamSize)
-        {
-            teamMembers.Add(new TeamMember(member));
-
-            if (GuiderMessageUI.Instance != null)
+            if (teamLeader == gameObject)
             {
-                GuiderMessageUI.Instance.ShowMessage("New team member joined!");
+                // Disband team if leader leaves
+                DisbandTeam();
             }
-        }
-    }
-
-    private void ManageTeam()
-    {
-        // Remove disconnected or distant members
-        teamMembers.RemoveAll(member => 
-            member.character == null || 
-            Vector3.Distance(transform.position, member.character.transform.position) > teamRadius * 1.5f
-        );
-
-        // Update trust levels
-        foreach (var member in teamMembers)
-        {
-            if (member.character != null)
+            else
             {
-                // Increase trust based on proximity and time
-                float distance = Vector3.Distance(transform.position, member.character.transform.position);
-                if (distance <= teamRadius)
+                // Remove self from team
+                var leaderTeam = teamLeader.GetComponent<TeamSystem>();
+                if (leaderTeam != null)
                 {
-                    member.trustLevel = Mathf.Min(1f, member.trustLevel + trustGainRate * Time.deltaTime);
+                    leaderTeam.RemoveMember(gameObject);
                 }
-
-                // Update contribution score
-                UpdateMemberContribution(member);
             }
         }
-    }
 
-    private void UpdateMemberContribution(TeamMember member)
-    {
-        if (member.character == null) return;
-
-        NeuralNetwork memberNetwork = member.character.GetComponent<NeuralNetwork>();
-        if (memberNetwork != null)
+        public void AddMember(GameObject member)
         {
-            // Calculate contribution based on neural network development
-            float development = memberNetwork.GetTotalDevelopment();
-            member.contributionScore = development * member.trustLevel;
-        }
-    }
+            if (!hasTeam || teamMembers.Count >= maxTeamSize || teamMembers.Contains(member))
+                return;
 
-    private void ShareKnowledgeWithTeam()
-    {
-        if (teamMembers.Count == 0 || neuralNetwork == null) return;
+            teamMembers.Add(member);
 
-        foreach (var member in teamMembers)
-        {
-            if (member.character != null && member.trustLevel >= 0.5f)
+            // Set up member
+            var memberTeam = member.GetComponent<TeamSystem>();
+            if (memberTeam != null)
             {
-                NeuralNetwork memberNetwork = member.character.GetComponent<NeuralNetwork>();
-                if (memberNetwork != null)
-                {
-                    // Share neural network insights
-                    float sharedExperience = neuralNetwork.GetTotalDevelopment() * 0.1f * member.trustLevel;
-                    memberNetwork.GainExperience(sharedExperience);
+                memberTeam.JoinExistingTeam(gameObject);
+            }
 
-                    // Share any tradeable items if trust is high
-                    if (member.trustLevel >= 0.8f && tradingSystem != null)
+            onMemberJoined?.Invoke(member);
+        }
+
+        public void RemoveMember(GameObject member)
+        {
+            if (!hasTeam || !teamMembers.Contains(member))
+                return;
+
+            teamMembers.Remove(member);
+
+            // Clean up member
+            var memberTeam = member.GetComponent<TeamSystem>();
+            if (memberTeam != null)
+            {
+                memberTeam.ResetTeam();
+            }
+
+            onMemberLeft?.Invoke(member);
+        }
+
+        private void JoinExistingTeam(GameObject newLeader)
+        {
+            teamLeader = newLeader;
+            hasTeam = true;
+            isTeamLeader = false;
+            teamMembers.Clear();
+            teamMembers.Add(gameObject);
+
+            onLeaderChanged?.Invoke(teamLeader);
+        }
+
+        private void DisbandTeam()
+        {
+            // Notify all members
+            foreach (var member in new List<GameObject>(teamMembers))
+            {
+                if (member != gameObject)
+                {
+                    var memberTeam = member.GetComponent<TeamSystem>();
+                    if (memberTeam != null)
                     {
-                        TradingSystem memberTrading = member.character.GetComponent<TradingSystem>();
-                        if (memberTrading != null && !tradingSystem.IsTrading() && !memberTrading.IsTrading())
-                        {
-                            // Automatic safe trading between trusted team members
-                            tradingSystem.InitiateTrade(memberTrading);
-                        }
+                        memberTeam.ResetTeam();
+                    }
+                    onMemberLeft?.Invoke(member);
+                }
+            }
+
+            ResetTeam();
+        }
+
+        private void ResetTeam()
+        {
+            teamLeader = null;
+            hasTeam = false;
+            isTeamLeader = false;
+            teamMembers.Clear();
+
+            onLeaderChanged?.Invoke(null);
+        }
+
+        private void UpdateTeamFormation()
+        {
+            // Simple circular formation
+            float angleStep = 360f / teamMembers.Count;
+            for (int i = 1; i < teamMembers.Count; i++) // Skip leader (index 0)
+            {
+                float angle = angleStep * i * Mathf.Deg2Rad;
+                Vector3 offset = new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle)) * teamRadius;
+                Vector3 targetPosition = transform.position + offset;
+
+                // Move member towards position
+                var member = teamMembers[i];
+                if (member != null)
+                {
+                    var agent = member.GetComponent<UnityEngine.AI.NavMeshAgent>();
+                    if (agent != null)
+                    {
+                        agent.SetDestination(targetPosition);
                     }
                 }
             }
         }
-    }
 
-    public bool IsInTeam()
-    {
-        return teamMembers.Count > 0;
-    }
-
-    public bool IsTeamLeader()
-    {
-        return isTeamLeader;
-    }
-
-    public List<TeamMember> GetTeamMembers()
-    {
-        return teamMembers;
-    }
-
-    void OnDrawGizmosSelected()
-    {
-        // Draw team radius
-        Gizmos.color = Color.green;
-        Gizmos.DrawWireSphere(transform.position, teamRadius);
-
-        // Draw lines to team members
-        if (teamMembers != null)
+        public bool IsTeamLeader()
         {
-            foreach (var member in teamMembers)
-            {
-                if (member.character != null)
-                {
-                    Gizmos.color = Color.blue;
-                    Gizmos.DrawLine(transform.position, member.character.transform.position);
-                }
-            }
+            return hasTeam && teamLeader == gameObject;
+        }
+
+        public bool HasTeam()
+        {
+            return hasTeam;
+        }
+
+        public bool CanAcceptMember()
+        {
+            return hasTeam && IsTeamLeader() && teamMembers.Count < maxTeamSize;
+        }
+
+        public List<GameObject> GetTeamMembers()
+        {
+            return new List<GameObject>(teamMembers);
+        }
+
+        public GameObject GetTeamLeader()
+        {
+            return teamLeader;
         }
     }
 }

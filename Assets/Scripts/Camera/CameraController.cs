@@ -1,155 +1,107 @@
 using UnityEngine;
 
-public class CameraController : MonoBehaviour
+namespace REcreationOfSpace.Camera
 {
-    [Header("Follow Settings")]
-    public float followSpeed = 5f;
-    public float heightAboveGround = 20f;
-    public float lookAngle = 60f;
-    public float distanceBehind = 10f;
-
-    [Header("Boundaries")]
-    public float minHeight = 15f;
-    public float maxHeight = 25f;
-    public float minAngle = 45f;
-    public float maxAngle = 75f;
-    public float zoomSpeed = 5f;
-
-    private Transform target;
-    private Vector3 offset;
-    private float currentHeight;
-    private float currentAngle;
-
-    void Start()
+    public class CameraController : MonoBehaviour
     {
-        currentHeight = heightAboveGround;
-        currentAngle = lookAngle;
-        UpdateCameraPosition();
-    }
+        [Header("Follow Settings")]
+        [SerializeField] private Transform target;
+        [SerializeField] private Vector3 offset = new Vector3(0, 10, -10);
+        [SerializeField] private float smoothSpeed = 5f;
+        [SerializeField] private float rotationAngle = 45f;
 
-    void LateUpdate()
-    {
-        if (target == null) return;
+        [Header("Zoom Settings")]
+        [SerializeField] private float minZoom = 5f;
+        [SerializeField] private float maxZoom = 15f;
+        [SerializeField] private float zoomSpeed = 2f;
+        [SerializeField] private float zoomSmoothSpeed = 10f;
 
-        HandleZoom();
-        HandleRotation();
-        FollowTarget();
-    }
+        private float currentZoom;
+        private float targetZoom;
 
-    public void SetTarget(Transform newTarget)
-    {
-        target = newTarget;
-        if (target != null)
+        private void Start()
         {
-            UpdateCameraPosition();
+            // If no target is set, try to find the player
+            if (target == null)
+            {
+                var player = GameObject.FindGameObjectWithTag("Player");
+                if (player != null)
+                    target = player.transform;
+            }
+
+            // Initialize zoom
+            currentZoom = offset.magnitude;
+            targetZoom = currentZoom;
+
+            // Set initial rotation
+            transform.rotation = Quaternion.Euler(rotationAngle, 0, 0);
         }
-    }
 
-    void HandleZoom()
-    {
-        float scroll = Input.GetAxis("Mouse ScrollWheel");
-        if (scroll != 0)
+        private void LateUpdate()
         {
-            // Adjust height
-            currentHeight = Mathf.Clamp(
-                currentHeight - scroll * zoomSpeed,
-                minHeight,
-                maxHeight
-            );
+            if (target == null)
+                return;
 
-            // Adjust angle based on height
-            float heightRatio = (currentHeight - minHeight) / (maxHeight - minHeight);
-            currentAngle = Mathf.Lerp(minAngle, maxAngle, heightRatio);
+            // Handle zoom input
+            float scrollInput = Input.GetAxis("Mouse ScrollWheel");
+            if (scrollInput != 0)
+            {
+                targetZoom = Mathf.Clamp(targetZoom - scrollInput * zoomSpeed, minZoom, maxZoom);
+            }
 
-            UpdateCameraPosition();
+            // Smoothly adjust current zoom
+            currentZoom = Mathf.Lerp(currentZoom, targetZoom, Time.deltaTime * zoomSmoothSpeed);
+
+            // Calculate target position with zoom
+            Vector3 zoomedOffset = offset.normalized * currentZoom;
+            Vector3 targetPosition = target.position + zoomedOffset;
+
+            // Smoothly move camera
+            transform.position = Vector3.Lerp(transform.position, targetPosition, Time.deltaTime * smoothSpeed);
+
+            // Optional: Add screen edge scrolling
+            HandleScreenEdgeScrolling();
         }
-    }
 
-    void HandleRotation()
-    {
-        // Optional: Add camera rotation controls if needed
-        // For now, keeping fixed rotation for Diablo-style view
-    }
-
-    void FollowTarget()
-    {
-        if (target == null) return;
-
-        // Calculate desired position
-        Vector3 desiredPosition = CalculateCameraPosition();
-        
-        // Smoothly move camera
-        transform.position = Vector3.Lerp(
-            transform.position,
-            desiredPosition,
-            followSpeed * Time.deltaTime
-        );
-
-        // Always look at target
-        transform.LookAt(target.position);
-    }
-
-    void UpdateCameraPosition()
-    {
-        if (target == null) return;
-
-        // Immediately set camera position
-        transform.position = CalculateCameraPosition();
-        transform.LookAt(target.position);
-    }
-
-    Vector3 CalculateCameraPosition()
-    {
-        // Calculate position based on height and angle
-        float angleInRadians = currentAngle * Mathf.Deg2Rad;
-        float distanceZ = Mathf.Cos(angleInRadians) * distanceBehind;
-        float distanceY = Mathf.Sin(angleInRadians) * distanceBehind;
-
-        return target.position - Vector3.forward * distanceZ + Vector3.up * (currentHeight + distanceY);
-    }
-
-    // Helper method to check if a position is visible to the camera
-    public bool IsPositionVisible(Vector3 worldPosition)
-    {
-        Vector3 viewportPoint = GetComponent<Camera>().WorldToViewportPoint(worldPosition);
-        return viewportPoint.x >= 0 && viewportPoint.x <= 1 &&
-               viewportPoint.y >= 0 && viewportPoint.y <= 1 &&
-               viewportPoint.z > 0;
-    }
-
-    // Get ground position from screen point
-    public Vector3 GetGroundPosition(Vector2 screenPosition)
-    {
-        Ray ray = GetComponent<Camera>().ScreenPointToRay(screenPosition);
-        Plane groundPlane = new Plane(Vector3.up, 0);
-        
-        float distance;
-        if (groundPlane.Raycast(ray, out distance))
+        private void HandleScreenEdgeScrolling()
         {
-            return ray.GetPoint(distance);
+            float edgeSize = 20f; // pixels from screen edge that triggers scrolling
+            float scrollSpeed = 5f;
+            Vector3 scrollDirection = Vector3.zero;
+
+            // Check screen edges
+            if (Input.mousePosition.x < edgeSize)
+                scrollDirection.x = -1;
+            else if (Input.mousePosition.x > Screen.width - edgeSize)
+                scrollDirection.x = 1;
+
+            if (Input.mousePosition.y < edgeSize)
+                scrollDirection.z = -1;
+            else if (Input.mousePosition.y > Screen.height - edgeSize)
+                scrollDirection.z = 1;
+
+            // Apply scrolling
+            if (scrollDirection != Vector3.zero)
+            {
+                Vector3 right = transform.right;
+                Vector3 forward = Vector3.Cross(right, Vector3.up);
+                Vector3 scrollMovement = (right * scrollDirection.x + forward * scrollDirection.z) * scrollSpeed * Time.deltaTime;
+                
+                if (target != null)
+                    target.position += scrollMovement;
+            }
         }
-        
-        return Vector3.zero;
-    }
 
-    // Get direction from camera to point
-    public Vector3 GetDirectionToPoint(Vector3 point)
-    {
-        return (point - transform.position).normalized;
-    }
-
-    void OnDrawGizmosSelected()
-    {
-        if (target != null)
+        public void SetTarget(Transform newTarget)
         {
-            // Draw camera focus point
-            Gizmos.color = Color.yellow;
-            Gizmos.DrawWireSphere(target.position, 0.5f);
+            target = newTarget;
+        }
 
-            // Draw camera angle
-            Gizmos.color = Color.blue;
-            Vector3 angleDirection = Quaternion.Euler(-currentAngle, 0, 0) * Vector3.forward;
-            Gizmos.DrawRay(transform.position, angleDirection * 5f);
+        public void SetOffset(Vector3 newOffset)
+        {
+            offset = newOffset;
+            currentZoom = offset.magnitude;
+            targetZoom = currentZoom;
         }
     }
 }

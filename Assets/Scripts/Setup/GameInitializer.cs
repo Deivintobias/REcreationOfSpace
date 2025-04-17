@@ -1,162 +1,193 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
-public class GameInitializer : MonoBehaviour
+namespace REcreationOfSpace.Setup
 {
-    [Header("Prefabs")]
-    public GameObject playerPrefab;
-    public GameObject cameraPrefab;
-    public GameObject uiCanvasPrefab;
-    public GameObject firstGuidePrefab;
-    public GameObject paradiseCityPrefab;
-
-    [Header("World Generation")]
-    public WorldGenerator worldGenerator;
-    public LocalTerrainGenerator terrainGenerator;
-    public CharacterGenerator characterGenerator;
-    public CharacterVisualGenerator visualGenerator;
-
-    [Header("Testing Options")]
-    public bool startAsSinaiCharacter = true;
-    public Vector3 startPosition = new Vector3(0, 1, 0);
-    public bool spawnTestNPCs = true;
-    public int numberOfTestNPCs = 5;
-
-    private void Start()
+    public class GameInitializer : MonoBehaviour
     {
-        SetupWorld();
-        SetupPlayer();
-        SetupNPCs();
-        SetupUI();
-    }
+        [Header("Game Setup")]
+        [SerializeField] private GameObject gameSetupPrefab;
+        [SerializeField] private GameObject topDownGameSetupPrefab;
+        [SerializeField] private GameObject safeModeManagerPrefab;
+        [SerializeField] private GameObject debugManagerPrefab;
 
-    private void SetupWorld()
-    {
-        // Initialize world generator
-        if (worldGenerator == null)
+        private SafeModeManager safeModeManager;
+        private DebugManager debugManager;
+
+        [Header("UI Setup")]
+        [SerializeField] private GameObject characterMenuPrefab;
+        [SerializeField] private GameObject gameMenuPrefab;
+        [SerializeField] private GameObject timelineUIPrefab;
+
+        private void Awake()
         {
-            worldGenerator = gameObject.AddComponent<WorldGenerator>();
-        }
-        worldGenerator.GenerateWorld();
+            // Initialize debug and safe mode systems first
+            InitializeDebugSystems();
 
-        // Setup Mount Sinai
-        GameObject mountain = new GameObject("Mount_Sinai");
-        mountain.AddComponent<MountSinai>();
-        mountain.AddComponent<MountainTranscendence>();
-
-        // Setup Paradise City
-        if (paradiseCityPrefab != null)
-        {
-            Instantiate(paradiseCityPrefab, Vector3.zero, Quaternion.identity);
-        }
-
-        // Setup First Guide
-        if (firstGuidePrefab != null)
-        {
-            Instantiate(firstGuidePrefab, new Vector3(10, 0, 10), Quaternion.identity);
-        }
-
-        // Setup terrain generator
-        if (terrainGenerator == null)
-        {
-            terrainGenerator = gameObject.AddComponent<LocalTerrainGenerator>();
-        }
-    }
-
-    private void SetupPlayer()
-    {
-        // Create player
-        GameObject player = Instantiate(playerPrefab, startPosition, Quaternion.identity);
-        
-        // Add required components
-        player.AddComponent<PlayerController>();
-        player.AddComponent<NeuralNetwork>();
-        player.AddComponent<ExperienceManager>();
-        player.AddComponent<Health>();
-
-        // Setup character type specific components
-        if (startAsSinaiCharacter)
-        {
-            player.AddComponent<SinaiCharacter>();
-            player.AddComponent<SionObserver>();
-        }
-
-        // Generate visuals
-        if (visualGenerator != null)
-        {
-            visualGenerator.GenerateCharacterVisuals(player, !startAsSinaiCharacter);
-        }
-
-        // Setup camera
-        if (cameraPrefab != null)
-        {
-            GameObject camera = Instantiate(cameraPrefab);
-            CameraController cameraController = camera.GetComponent<CameraController>();
-            if (cameraController != null)
+            // Only proceed with game setup if not in safe mode diagnostic screen
+            if (safeModeManager == null || !safeModeManager.IsInSafeMode())
             {
-                cameraController.SetTarget(player.transform);
+                InitializeGame();
             }
         }
 
-        // Initialize terrain around player
-        if (terrainGenerator != null)
+        private void InitializeDebugSystems()
         {
-            terrainGenerator.Initialize(player.transform);
-        }
-    }
-
-    private void SetupNPCs()
-    {
-        if (!spawnTestNPCs) return;
-
-        for (int i = 0; i < numberOfTestNPCs; i++)
-        {
-            // Determine NPC type
-            bool isSionCharacter = Random.value > 0.3f; // 70% Sion, 30% Sinai
-
-            // Generate position
-            Vector3 randomPos = Random.insideUnitSphere * 20f;
-            randomPos.y = 1f;
-
-            // Create NPC
-            GameObject npc = new GameObject(isSionCharacter ? "Sion_NPC" : "Sinai_NPC");
-            npc.transform.position = randomPos;
-
-            // Add components
-            npc.AddComponent<CharacterController>();
-            npc.AddComponent<NeuralNetwork>();
-            npc.AddComponent<ExperienceManager>();
-            npc.AddComponent<Health>();
-
-            if (isSionCharacter)
+            // Create SafeModeManager
+            if (safeModeManagerPrefab != null)
             {
-                npc.AddComponent<DeceptionSystem>();
+                var safeMode = Instantiate(safeModeManagerPrefab);
+                safeModeManager = safeMode.GetComponent<SafeModeManager>();
             }
             else
             {
-                npc.AddComponent<SinaiCharacter>();
-                npc.AddComponent<SionObserver>();
+                var safeMode = new GameObject("SafeModeManager");
+                safeModeManager = safeMode.AddComponent<SafeModeManager>();
             }
 
-            // Generate visuals
-            if (visualGenerator != null)
+            // Create DebugManager
+            if (debugManagerPrefab != null)
             {
-                visualGenerator.GenerateCharacterVisuals(npc, isSionCharacter);
+                var debug = Instantiate(debugManagerPrefab);
+                debugManager = debug.GetComponent<DebugManager>();
+            }
+            else
+            {
+                var debug = new GameObject("DebugManager");
+                debugManager = debug.AddComponent<DebugManager>();
+                debug.AddComponent<DebugCommands>();
+            }
+
+            // Don't destroy these objects when loading new scenes
+            DontDestroyOnLoad(safeModeManager.gameObject);
+            DontDestroyOnLoad(debugManager.gameObject);
+        }
+
+        private void InitializeGame()
+        {
+            // Create game setup
+            if (SceneManager.GetActiveScene().name != "MainMenu")
+            {
+                if (gameSetupPrefab == null)
+                {
+                    var setupObj = new GameObject("GameSetup");
+                    setupObj.AddComponent<GameSetup>();
+                }
+                else
+                {
+                    Instantiate(gameSetupPrefab);
+                }
+
+                if (topDownGameSetupPrefab == null)
+                {
+                    var setupObj = new GameObject("TopDownGameSetup");
+                    setupObj.AddComponent<TopDownGameSetup>();
+                }
+                else
+                {
+                    Instantiate(topDownGameSetupPrefab);
+                }
+            }
+
+            // Create UI
+            CreateMenus();
+            CreateTimelineUI();
+        }
+
+        private void CreateMenus()
+        {
+            // Create character menu
+            if (SceneManager.GetActiveScene().name != "MainMenu")
+            {
+                GameObject characterMenu;
+                if (characterMenuPrefab != null)
+                {
+                    characterMenu = Instantiate(characterMenuPrefab);
+                }
+                else
+                {
+                    characterMenu = PrefabCreator.CreateCharacterMenuPrefab();
+                }
+                characterMenu.name = "CharacterMenu";
+                characterMenu.SetActive(false); // Hide initially
+            }
+
+            // Create game menu
+            GameObject gameMenu;
+            if (gameMenuPrefab != null)
+            {
+                gameMenu = Instantiate(gameMenuPrefab);
+            }
+            else
+            {
+                gameMenu = PrefabCreator.CreateGameMenuPrefab();
+            }
+            gameMenu.name = "GameMenu";
+
+            // Set up menu references
+            var menus = FindObjectsOfType<Canvas>();
+            foreach (var menu in menus)
+            {
+                // Ensure proper sorting order
+                switch (menu.gameObject.name)
+                {
+                    case "CharacterMenu":
+                        menu.sortingOrder = 1;
+                        break;
+                    case "GameMenu":
+                        menu.sortingOrder = 2;
+                        break;
+                    default:
+                        menu.sortingOrder = 0;
+                        break;
+                }
+            }
+
+            // Initialize default menu state
+            if (SceneManager.GetActiveScene().name == "MainMenu")
+            {
+                var gameMenuComponent = gameMenu.GetComponent<GameMenu>();
+                if (gameMenuComponent != null)
+                {
+                    gameMenuComponent.ShowMainMenu();
+                }
+            }
+            else
+            {
+                var gameMenuComponent = gameMenu.GetComponent<GameMenu>();
+                if (gameMenuComponent != null)
+                {
+                    gameMenuComponent.HidePauseMenu();
+                }
             }
         }
-    }
 
-    private void SetupUI()
-    {
-        if (uiCanvasPrefab != null)
+        private void CreateTimelineUI()
         {
-            GameObject canvas = Instantiate(uiCanvasPrefab);
-            
-            // Add UI components
-            canvas.AddComponent<GuiderMessageUI>();
-            canvas.AddComponent<HealthUI>();
-            canvas.AddComponent<NeuralNetworkUI>();
-            canvas.AddComponent<PortalPromptUI>();
-            canvas.AddComponent<ScreenFade>();
+            GameObject timelineUI;
+            if (timelineUIPrefab != null)
+            {
+                timelineUI = Instantiate(timelineUIPrefab);
+            }
+            else
+            {
+                timelineUI = PrefabCreator.CreateTimelineUIPrefab();
+            }
+            timelineUI.name = "TimelineUI";
+
+            // Set sorting order
+            var canvas = timelineUI.GetComponent<Canvas>();
+            if (canvas != null)
+            {
+                canvas.sortingOrder = 3; // Above other menus
+            }
+
+            timelineUI.SetActive(false); // Hide initially
+        }
+
+        private void OnDestroy()
+        {
+            // Clean up any temporary objects or references if needed
         }
     }
 }

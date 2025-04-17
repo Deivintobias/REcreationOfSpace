@@ -1,196 +1,135 @@
 using UnityEngine;
+using UnityEngine.Events;
 
-public class ResourceNode : MonoBehaviour
+namespace REcreationOfSpace.Resources
 {
-    [System.Serializable]
-    public class ResourceYield
+    public class ResourceNode : MonoBehaviour
     {
-        public string resourceName;
-        public float baseAmount = 1f;
-        public float regenerationTime = 300f; // 5 minutes
-        public bool isInfinite = false;
-    }
+        [Header("Resource Settings")]
+        [SerializeField] private string resourceType = "Wood";
+        [SerializeField] private int resourceAmount = 1;
+        [SerializeField] private float respawnTime = 30f;
+        [SerializeField] private bool isInfinite = false;
+        [SerializeField] private int maxHarvests = 3;
 
-    [Header("Resource Settings")]
-    public ResourceYield yield;
-    public float remainingAmount;
-    public float lastGatherTime;
-    public ParticleSystem gatherEffect;
-    public AudioClip gatherSound;
+        [Header("Effects")]
+        [SerializeField] private ParticleSystem harvestEffect;
+        [SerializeField] private AudioClip harvestSound;
+        [SerializeField] private GameObject depleteEffect;
+        [SerializeField] private GameObject visualObject;
 
-    [Header("Visual Settings")]
-    public Material depleetedMaterial;
-    public Vector3 depleetedScale = new Vector3(0.8f, 0.8f, 0.8f);
-    
-    private Material originalMaterial;
-    private Vector3 originalScale;
-    private bool isDepleeted = false;
-    private AudioSource audioSource;
+        public UnityEvent<string, int> onResourceCollected; // Resource type, amount
+        public UnityEvent onNodeDepleted;
 
-    void Start()
-    {
-        // Store original appearance
-        Renderer renderer = GetComponent<Renderer>();
-        if (renderer != null)
+        private int harvestCount = 0;
+        private bool isDepleted = false;
+        private float respawnTimer = 0f;
+        private AudioSource audioSource;
+        private ResourceSystem resourceSystem;
+
+        private void Awake()
         {
-            originalMaterial = renderer.material;
-        }
-        originalScale = transform.localScale;
-
-        // Initialize audio
-        audioSource = gameObject.AddComponent<AudioSource>();
-        audioSource.spatialBlend = 1f; // Full 3D sound
-        audioSource.maxDistance = 20f;
-        audioSource.rolloffMode = AudioRolloffMode.Linear;
-
-        // Initialize resource amount
-        remainingAmount = yield.baseAmount;
-        lastGatherTime = Time.time;
-    }
-
-    void Update()
-    {
-        // Check for regeneration
-        if (isDepleeted && !yield.isInfinite)
-        {
-            if (Time.time - lastGatherTime >= yield.regenerationTime)
+            audioSource = GetComponent<AudioSource>();
+            if (audioSource == null && harvestSound != null)
             {
-                Regenerate();
+                audioSource = gameObject.AddComponent<AudioSource>();
             }
+
+            resourceSystem = FindObjectOfType<ResourceSystem>();
         }
-    }
 
-    public ResourceSystem.Resource GatherResource()
-    {
-        if (isDepleeted) return null;
-
-        // Create gathered resource
-        ResourceSystem.Resource gathered = new ResourceSystem.Resource
+        private void Update()
         {
-            name = yield.resourceName,
-            quantity = yield.baseAmount,
-            type = GetResourceType(yield.resourceName)
-        };
-
-        // Update node state
-        if (!yield.isInfinite)
-        {
-            remainingAmount -= yield.baseAmount;
-            if (remainingAmount <= 0)
+            if (isDepleted && !isInfinite)
             {
-                SetDepleeted();
+                respawnTimer += Time.deltaTime;
+                if (respawnTimer >= respawnTime)
+                {
+                    Respawn();
+                }
             }
         }
 
-        // Play effects
-        PlayGatherEffects();
-
-        return gathered;
-    }
-
-    private ResourceSystem.ResourceType GetResourceType(string resourceName)
-    {
-        // Match resource name to type
-        foreach (var baseResource in ResourceSystem.baseResources)
+        public void Interact()
         {
-            if (baseResource.name == resourceName)
+            if (isDepleted)
+                return;
+
+            // Collect resource
+            if (resourceSystem != null)
             {
-                return baseResource.type;
+                resourceSystem.AddResource(resourceType, resourceAmount);
+            }
+
+            // Play effects
+            if (harvestEffect != null)
+            {
+                harvestEffect.Play();
+            }
+
+            if (audioSource != null && harvestSound != null)
+            {
+                audioSource.PlayOneShot(harvestSound);
+            }
+
+            // Notify listeners
+            onResourceCollected?.Invoke(resourceType, resourceAmount);
+
+            // Handle depletion
+            harvestCount++;
+            if (!isInfinite && harvestCount >= maxHarvests)
+            {
+                Deplete();
             }
         }
-        return ResourceSystem.ResourceType.Natural; // Default type
-    }
 
-    private void SetDepleeted()
-    {
-        isDepleeted = true;
-        lastGatherTime = Time.time;
-
-        // Update appearance
-        Renderer renderer = GetComponent<Renderer>();
-        if (renderer != null && depleetedMaterial != null)
+        private void Deplete()
         {
-            renderer.material = depleetedMaterial;
+            isDepleted = true;
+            respawnTimer = 0f;
+
+            // Hide visual
+            if (visualObject != null)
+            {
+                visualObject.SetActive(false);
+            }
+
+            // Show depletion effect
+            if (depleteEffect != null)
+            {
+                Instantiate(depleteEffect, transform.position, Quaternion.identity);
+            }
+
+            // Notify listeners
+            onNodeDepleted?.Invoke();
         }
 
-        transform.localScale = depleetedScale;
-    }
-
-    private void Regenerate()
-    {
-        isDepleeted = false;
-        remainingAmount = yield.baseAmount;
-
-        // Restore appearance
-        Renderer renderer = GetComponent<Renderer>();
-        if (renderer != null && originalMaterial != null)
+        private void Respawn()
         {
-            renderer.material = originalMaterial;
+            isDepleted = false;
+            harvestCount = 0;
+            respawnTimer = 0f;
+
+            // Show visual
+            if (visualObject != null)
+            {
+                visualObject.SetActive(true);
+            }
         }
 
-        transform.localScale = originalScale;
-
-        // Play regeneration effect
-        if (gatherEffect != null)
+        public bool IsDepleted()
         {
-            ParticleSystem effect = Instantiate(gatherEffect, transform.position, Quaternion.identity);
-            effect.Play();
-            Destroy(effect.gameObject, effect.main.duration);
-        }
-    }
-
-    private void PlayGatherEffects()
-    {
-        // Particle effect
-        if (gatherEffect != null)
-        {
-            ParticleSystem effect = Instantiate(gatherEffect, transform.position, Quaternion.identity);
-            effect.Play();
-            Destroy(effect.gameObject, effect.main.duration);
+            return isDepleted;
         }
 
-        // Sound effect
-        if (gatherSound != null && audioSource != null)
+        public string GetResourceType()
         {
-            audioSource.PlayOneShot(gatherSound);
+            return resourceType;
         }
-    }
 
-    public bool IsDepeleted()
-    {
-        return isDepleeted;
-    }
-
-    public float GetRegenerationProgress()
-    {
-        if (!isDepleeted || yield.isInfinite) return 1f;
-        
-        float timeSinceGather = Time.time - lastGatherTime;
-        return Mathf.Clamp01(timeSinceGather / yield.regenerationTime);
-    }
-
-    void OnDrawGizmos()
-    {
-        // Draw resource type indicator
-        Gizmos.color = GetResourceColor(yield.resourceName);
-        Gizmos.DrawWireSphere(transform.position, 0.5f);
-    }
-
-    private Color GetResourceColor(string resourceName)
-    {
-        // Color coding for resource types
-        switch (GetResourceType(resourceName))
+        public float GetRespawnProgress()
         {
-            case ResourceSystem.ResourceType.Natural:
-                return Color.green;
-            case ResourceSystem.ResourceType.Sacred:
-                return Color.yellow;
-            case ResourceSystem.ResourceType.Knowledge:
-                return Color.blue;
-            case ResourceSystem.ResourceType.Energy:
-                return Color.magenta;
-            default:
-                return Color.white;
+            return isDepleted ? respawnTimer / respawnTime : 1f;
         }
     }
 }

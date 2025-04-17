@@ -1,116 +1,168 @@
 using UnityEngine;
 using UnityEngine.AI;
 
-[RequireComponent(typeof(NavMeshAgent))]
-[RequireComponent(typeof(Health))]
-public class EnemyAI : MonoBehaviour
+namespace REcreationOfSpace.Enemy
 {
-    [Header("Enemy Settings")]
-    public float detectionRange = 10f;
-    public float attackRange = 2f;
-    public float attackDamage = 10f;
-    public float attackCooldown = 1.5f;
-
-    private Transform player;
-    private NavMeshAgent agent;
-    private Health health;
-    private float nextAttackTime;
-
-    private enum EnemyState
+    [RequireComponent(typeof(NavMeshAgent))]
+    public class EnemyAI : MonoBehaviour
     {
-        Idle,
-        Chasing,
-        Attacking
-    }
+        [Header("AI Settings")]
+        [SerializeField] private float detectionRange = 10f;
+        [SerializeField] private float attackRange = 2f;
+        [SerializeField] private float patrolRadius = 10f;
+        [SerializeField] private float minPatrolWaitTime = 2f;
+        [SerializeField] private float maxPatrolWaitTime = 5f;
 
-    private EnemyState currentState = EnemyState.Idle;
+        private NavMeshAgent agent;
+        private GameObject target;
+        private Vector3 startPosition;
+        private CombatController combat;
+        private Health health;
+        private float nextPatrolTime;
 
-    private void Start()
-    {
-        agent = GetComponent<NavMeshAgent>();
-        health = GetComponent<Health>();
-        player = GameObject.FindGameObjectWithTag("Player")?.transform;
+        private enum State { Patrol, Chase, Attack }
+        private State currentState;
 
-        // Subscribe to death event
-        health.onDeath.AddListener(OnDeath);
-    }
-
-    private void Update()
-    {
-        if (player == null) return;
-
-        float distanceToPlayer = Vector3.Distance(transform.position, player.position);
-
-        // Update state based on distance to player
-        if (distanceToPlayer <= attackRange)
+        private void Awake()
         {
-            currentState = EnemyState.Attacking;
-        }
-        else if (distanceToPlayer <= detectionRange)
-        {
-            currentState = EnemyState.Chasing;
-        }
-        else
-        {
-            currentState = EnemyState.Idle;
+            agent = GetComponent<NavMeshAgent>();
+            combat = GetComponent<CombatController>();
+            health = GetComponent<Health>();
+            startPosition = transform.position;
+            currentState = State.Patrol;
         }
 
-        // Handle behavior based on state
-        switch (currentState)
+        private void Start()
         {
-            case EnemyState.Idle:
-                // Could add patrol behavior here
-                agent.isStopped = true;
-                break;
+            SetNewPatrolDestination();
+        }
 
-            case EnemyState.Chasing:
-                agent.isStopped = false;
-                agent.SetDestination(player.position);
-                break;
+        private void Update()
+        {
+            if (health != null && health.IsDead())
+                return;
 
-            case EnemyState.Attacking:
-                agent.isStopped = true;
-                if (Time.time >= nextAttackTime)
+            switch (currentState)
+            {
+                case State.Patrol:
+                    Patrol();
+                    break;
+                case State.Chase:
+                    ChaseTarget();
+                    break;
+                case State.Attack:
+                    AttackTarget();
+                    break;
+            }
+        }
+
+        private void Patrol()
+        {
+            // Look for potential targets
+            Collider[] colliders = Physics.OverlapSphere(transform.position, detectionRange);
+            foreach (var collider in colliders)
+            {
+                if (collider.CompareTag("Player"))
                 {
-                    AttackPlayer();
+                    target = collider.gameObject;
+                    currentState = State.Chase;
+                    return;
                 }
-                break;
+            }
+
+            // Handle patrol movement
+            if (Time.time >= nextPatrolTime && !agent.pathPending && agent.remainingDistance < 0.5f)
+            {
+                SetNewPatrolDestination();
+            }
         }
-    }
 
-    private void AttackPlayer()
-    {
-        // Reset attack cooldown
-        nextAttackTime = Time.time + attackCooldown;
-
-        // Get player's health component and apply damage
-        Health playerHealth = player.GetComponent<Health>();
-        if (playerHealth != null)
+        private void ChaseTarget()
         {
-            playerHealth.TakeDamage(attackDamage);
+            if (target == null)
+            {
+                currentState = State.Patrol;
+                return;
+            }
+
+            float distanceToTarget = Vector3.Distance(transform.position, target.transform.position);
+
+            if (distanceToTarget <= attackRange)
+            {
+                currentState = State.Attack;
+            }
+            else if (distanceToTarget > detectionRange)
+            {
+                target = null;
+                currentState = State.Patrol;
+            }
+            else
+            {
+                agent.SetDestination(target.transform.position);
+            }
         }
 
-        // Here you could trigger attack animation
-        // animator.SetTrigger("Attack");
-    }
+        private void AttackTarget()
+        {
+            if (target == null)
+            {
+                currentState = State.Patrol;
+                return;
+            }
 
-    private void OnDeath()
-    {
-        // Handle enemy death
-        agent.isStopped = true;
-        enabled = false;
-        
-        // You might want to play death animation here before destroying
-        Destroy(gameObject, 2f); // Destroy after 2 seconds
-    }
+            float distanceToTarget = Vector3.Distance(transform.position, target.transform.position);
 
-    // Visualize detection and attack ranges in editor
-    private void OnDrawGizmosSelected()
-    {
-        Gizmos.color = Color.yellow;
-        Gizmos.DrawWireSphere(transform.position, detectionRange);
+            if (distanceToTarget > attackRange)
+            {
+                currentState = State.Chase;
+                return;
+            }
 
-        Gizmos.color = Color.red;
-        Gizmos.DrawWireSphere(transform.position, attackRange);
+            // Face the target
+            Vector3 direction = (target.transform.position - transform.position).normalized;
+            transform.rotation = Quaternion.LookRotation(new Vector3(direction.x, 0, direction.z));
+
+            // Attack
+            if (combat != null)
+            {
+                combat.Attack();
+            }
+        }
+
+        private void SetNewPatrolDestination()
+        {
+            Vector3 randomDirection = Random.insideUnitSphere * patrolRadius;
+            randomDirection += startPosition;
+            NavMeshHit hit;
+            if (NavMesh.SamplePosition(randomDirection, out hit, patrolRadius, 1))
+            {
+                agent.SetDestination(hit.position);
+                nextPatrolTime = Time.time + Random.Range(minPatrolWaitTime, maxPatrolWaitTime);
+            }
+        }
+
+        public void OnAttacked(GameObject attacker)
+        {
+            if (currentState == State.Patrol)
+            {
+                target = attacker;
+                currentState = State.Chase;
+            }
+        }
+
+        private void OnDrawGizmosSelected()
+        {
+            // Draw detection range
+            Gizmos.color = Color.yellow;
+            Gizmos.DrawWireSphere(transform.position, detectionRange);
+
+            // Draw attack range
+            Gizmos.color = Color.red;
+            Gizmos.DrawWireSphere(transform.position, attackRange);
+
+            // Draw patrol radius
+            Gizmos.color = Color.blue;
+            Gizmos.DrawWireSphere(startPosition, patrolRadius);
+        }
     }
 }

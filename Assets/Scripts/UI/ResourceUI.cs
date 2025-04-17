@@ -1,189 +1,166 @@
 using UnityEngine;
 using UnityEngine.UI;
+using TMPro;
 using System.Collections.Generic;
 
-public class ResourceUI : MonoBehaviour
+namespace REcreationOfSpace.UI
 {
-    [System.Serializable]
-    public class ResourceDisplay
+    public class ResourceUI : MonoBehaviour
     {
-        public string resourceName;
-        public Image icon;
-        public Text quantityText;
-        public Image progressBar;
-    }
-
-    [Header("UI References")]
-    public GameObject resourcePanel;
-    public GameObject resourceDisplayPrefab;
-    public Transform resourceContainer;
-    public Image gatherProgressBar;
-    public Text gatherText;
-
-    [Header("Visual Settings")]
-    public Color naturalColor = Color.green;
-    public Color sacredColor = Color.yellow;
-    public Color knowledgeColor = Color.blue;
-    public Color energyColor = Color.magenta;
-    public Color refinedColor = Color.cyan;
-
-    private Dictionary<string, ResourceDisplay> resourceDisplays = new Dictionary<string, ResourceDisplay>();
-    private ResourceSystem resourceSystem;
-    private bool isGathering = false;
-
-    void Start()
-    {
-        resourceSystem = FindObjectOfType<ResourceSystem>();
-        if (resourceSystem != null)
+        [System.Serializable]
+        private class ResourceDisplay
         {
-            InitializeResourceDisplays();
+            public string resourceType;
+            public Image icon;
+            public TextMeshProUGUI amountText;
+            public Slider progressBar;
         }
 
-        // Initially hide gather progress
-        if (gatherProgressBar != null)
-        {
-            gatherProgressBar.gameObject.SetActive(false);
-        }
-        if (gatherText != null)
-        {
-            gatherText.gameObject.SetActive(false);
-        }
-    }
+        [Header("UI Settings")]
+        [SerializeField] private GameObject resourceDisplayPrefab;
+        [SerializeField] private Transform resourceContainer;
+        [SerializeField] private bool showProgressBars = true;
+        [SerializeField] private string amountFormat = "{0}/{1}";
 
-    void Update()
-    {
-        if (resourceSystem != null)
+        [Header("Animation")]
+        [SerializeField] private float updateSpeed = 5f;
+        [SerializeField] private bool animateChanges = true;
+
+        private Dictionary<string, ResourceDisplay> resourceDisplays = new Dictionary<string, ResourceDisplay>();
+        private ResourceSystem resourceSystem;
+        private Dictionary<string, float> displayedAmounts = new Dictionary<string, float>();
+
+        private void Start()
         {
-            UpdateResourceDisplays();
-            UpdateGatherProgress();
-        }
-    }
-
-    private void InitializeResourceDisplays()
-    {
-        // Clear existing displays
-        foreach (Transform child in resourceContainer)
-        {
-            Destroy(child.gameObject);
-        }
-        resourceDisplays.Clear();
-
-        // Create displays for each resource type
-        foreach (var resource in ResourceSystem.baseResources)
-        {
-            CreateResourceDisplay(resource);
-        }
-    }
-
-    private void CreateResourceDisplay(ResourceSystem.Resource resource)
-    {
-        if (resourceDisplayPrefab == null || resourceContainer == null) return;
-
-        // Instantiate display
-        GameObject displayObj = Instantiate(resourceDisplayPrefab, resourceContainer);
-        ResourceDisplay display = new ResourceDisplay();
-
-        // Setup components
-        display.icon = displayObj.transform.Find("Icon")?.GetComponent<Image>();
-        display.quantityText = displayObj.transform.Find("QuantityText")?.GetComponent<Text>();
-        display.progressBar = displayObj.transform.Find("ProgressBar")?.GetComponent<Image>();
-
-        // Set initial values
-        if (display.icon != null)
-        {
-            display.icon.color = GetResourceColor(resource.type);
-        }
-        if (display.quantityText != null)
-        {
-            display.quantityText.text = $"{resource.name}: 0";
-        }
-        if (display.progressBar != null)
-        {
-            display.progressBar.fillAmount = 0f;
-        }
-
-        resourceDisplays[resource.name] = display;
-    }
-
-    private void UpdateResourceDisplays()
-    {
-        var inventory = resourceSystem.GetInventory();
-        foreach (var kvp in inventory)
-        {
-            if (resourceDisplays.TryGetValue(kvp.Key, out ResourceDisplay display))
+            // Find resource system
+            resourceSystem = FindObjectOfType<ResourceSystem>();
+            if (resourceSystem != null)
             {
-                // Update quantity text
-                if (display.quantityText != null)
-                {
-                    display.quantityText.text = $"{kvp.Key}: {Mathf.Floor(kvp.Value.quantity)}";
-                }
+                // Subscribe to events
+                resourceSystem.onResourceChanged.AddListener(UpdateResource);
+                resourceSystem.onResourceMaxed.AddListener(OnResourceMaxed);
 
-                // Update progress bar
-                if (display.progressBar != null)
+                // Create displays for existing resources
+                foreach (string resourceType in resourceSystem.GetAllResourceTypes())
                 {
-                    display.progressBar.fillAmount = kvp.Value.quantity / kvp.Value.maxStack;
+                    CreateResourceDisplay(resourceType);
                 }
             }
         }
-    }
 
-    private void UpdateGatherProgress()
-    {
-        float progress = resourceSystem.GetGatherProgress();
-        bool currentlyGathering = progress > 0f && progress < 1f;
-
-        // Show/hide gather progress
-        if (currentlyGathering != isGathering)
+        private void Update()
         {
-            isGathering = currentlyGathering;
-            if (gatherProgressBar != null)
+            if (!animateChanges)
+                return;
+
+            // Smoothly update displayed amounts
+            foreach (var kvp in displayedAmounts)
             {
-                gatherProgressBar.gameObject.SetActive(isGathering);
+                string resourceType = kvp.Key;
+                float currentDisplay = kvp.Value;
+                float targetAmount = resourceSystem.GetResourceAmount(resourceType);
+
+                if (Mathf.Abs(currentDisplay - targetAmount) > 0.01f)
+                {
+                    float newAmount = Mathf.Lerp(currentDisplay, targetAmount, Time.deltaTime * updateSpeed);
+                    displayedAmounts[resourceType] = newAmount;
+                    UpdateDisplayAmount(resourceType, (int)newAmount);
+                }
             }
-            if (gatherText != null)
+        }
+
+        private void CreateResourceDisplay(string resourceType)
+        {
+            if (resourceDisplays.ContainsKey(resourceType))
+                return;
+
+            GameObject displayObj = Instantiate(resourceDisplayPrefab, resourceContainer);
+            ResourceDisplay display = new ResourceDisplay
             {
-                gatherText.gameObject.SetActive(isGathering);
+                resourceType = resourceType,
+                icon = displayObj.GetComponentInChildren<Image>(),
+                amountText = displayObj.GetComponentInChildren<TextMeshProUGUI>(),
+                progressBar = displayObj.GetComponentInChildren<Slider>()
+            };
+
+            // Set up icon
+            if (display.icon != null)
+            {
+                display.icon.sprite = resourceSystem.GetResourceIcon(resourceType);
+            }
+
+            // Initialize progress bar
+            if (display.progressBar != null)
+            {
+                display.progressBar.gameObject.SetActive(showProgressBars);
+            }
+
+            resourceDisplays[resourceType] = display;
+            displayedAmounts[resourceType] = resourceSystem.GetResourceAmount(resourceType);
+
+            // Update initial display
+            UpdateResource(resourceType, resourceSystem.GetResourceAmount(resourceType));
+        }
+
+        private void UpdateResource(string type, int amount)
+        {
+            if (!resourceDisplays.ContainsKey(type))
+            {
+                CreateResourceDisplay(type);
+            }
+
+            if (!animateChanges)
+            {
+                UpdateDisplayAmount(type, amount);
+                displayedAmounts[type] = amount;
+            }
+            else
+            {
+                displayedAmounts[type] = amount;
             }
         }
 
-        // Update progress
-        if (isGathering)
+        private void UpdateDisplayAmount(string type, int amount)
         {
-            if (gatherProgressBar != null)
+            if (!resourceDisplays.ContainsKey(type))
+                return;
+
+            var display = resourceDisplays[type];
+
+            // Update text
+            if (display.amountText != null)
             {
-                gatherProgressBar.fillAmount = progress;
+                display.amountText.text = string.Format(amountFormat, amount, resourceSystem.IsResourceMaxed(type) ? "MAX" : "999");
             }
-            if (gatherText != null)
+
+            // Update progress bar
+            if (display.progressBar != null && showProgressBars)
             {
-                gatherText.text = $"Gathering... {Mathf.Floor(progress * 100)}%";
+                display.progressBar.value = amount / 999f;
             }
         }
-    }
 
-    private Color GetResourceColor(ResourceSystem.ResourceType type)
-    {
-        switch (type)
+        private void OnResourceMaxed(string type)
         {
-            case ResourceSystem.ResourceType.Natural:
-                return naturalColor;
-            case ResourceSystem.ResourceType.Sacred:
-                return sacredColor;
-            case ResourceSystem.ResourceType.Knowledge:
-                return knowledgeColor;
-            case ResourceSystem.ResourceType.Energy:
-                return energyColor;
-            case ResourceSystem.ResourceType.Refined:
-                return refinedColor;
-            default:
-                return Color.white;
+            if (!resourceDisplays.ContainsKey(type))
+                return;
+
+            var display = resourceDisplays[type];
+            
+            // Visual feedback for maxed resource
+            if (display.amountText != null)
+            {
+                display.amountText.color = Color.yellow;
+            }
         }
-    }
 
-    public void ToggleVisibility()
-    {
-        if (resourcePanel != null)
+        private void OnDestroy()
         {
-            resourcePanel.SetActive(!resourcePanel.activeSelf);
+            if (resourceSystem != null)
+            {
+                resourceSystem.onResourceChanged.RemoveListener(UpdateResource);
+                resourceSystem.onResourceMaxed.RemoveListener(OnResourceMaxed);
+            }
         }
     }
 }

@@ -1,242 +1,270 @@
 using UnityEngine;
+using REcreationOfSpace.Farming;
+using REcreationOfSpace.Crafting;
+using REcreationOfSpace.UI;
 
-public class PlayerController : MonoBehaviour
+namespace REcreationOfSpace.Player
 {
-    [Header("Movement Settings")]
-    public float moveSpeed = 5f;
-    public float rotationSpeed = 360f;
-    
-    [Header("Interaction Settings")]
-    public float interactionRange = 2f;
-    public LayerMask interactionMask;
-
-    private CharacterController controller;
-    private Camera mainCamera;
-    private Vector3 moveDirection;
-    private bool isInteracting;
-
-    // Farming variables
-    private bool isFarming = false;
-    private float farmingProgress = 0f;
-    private float farmingTime = 2f;
-
-    // Homestead variables
-    private bool isBuilding = false;
-    private float buildProgress = 0f;
-    private float buildTime = 3f;
-
-    void Start()
+    [RequireComponent(typeof(Rigidbody))]
+    public class PlayerController : MonoBehaviour
     {
-        controller = GetComponent<CharacterController>();
-        mainCamera = Camera.main;
-        
-        if (controller == null)
+        [Header("Movement Settings")]
+        [SerializeField] private float moveSpeed = 5f;
+        [SerializeField] private float rotationSpeed = 360f;
+        [SerializeField] private float interactionRange = 2f;
+
+        [Header("Farming Tools")]
+        [SerializeField] private KeyCode plowKey = KeyCode.Q;
+        [SerializeField] private KeyCode waterKey = KeyCode.R;
+        [SerializeField] private KeyCode plantKey = KeyCode.F;
+        [SerializeField] private KeyCode harvestKey = KeyCode.G;
+
+        [Header("Menu Keys")]
+        [SerializeField] private KeyCode characterMenuKey = KeyCode.C;
+        [SerializeField] private KeyCode inventoryKey = KeyCode.I;
+        [SerializeField] private KeyCode mapKey = KeyCode.M;
+        [SerializeField] private KeyCode timelineKey = KeyCode.T;
+
+        private Rigidbody rb;
+        private CombatController combat;
+        private FarmPlot currentFarmPlot;
+        private Workbench currentWorkbench;
+        private ResourceNode currentResourceNode;
+
+        private CharacterMenu characterMenu;
+        private GameMenu gameMenu;
+        private TimelineUI timelineUI;
+        private bool isMenuOpen = false;
+
+        private void Start()
         {
-            controller = gameObject.AddComponent<CharacterController>();
-        }
-    }
+            rb = GetComponent<Rigidbody>();
+            combat = GetComponent<CombatController>();
 
-    void Update()
-    {
-        HandleMovement();
-        HandleInteraction();
-        HandleFarming();
-        HandleBuilding();
-    }
+            // Find menu references
+            characterMenu = FindObjectOfType<CharacterMenu>();
+            gameMenu = FindObjectOfType<GameMenu>();
+            timelineUI = FindObjectOfType<TimelineUI>();
 
-    void HandleMovement()
-    {
-        // Get input
-        float horizontal = Input.GetAxisRaw("Horizontal");
-        float vertical = Input.GetAxisRaw("Vertical");
-
-        // Calculate movement direction relative to camera
-        Vector3 forward = Vector3.ProjectOnPlane(mainCamera.transform.forward, Vector3.up).normalized;
-        Vector3 right = Vector3.Cross(Vector3.up, forward);
-        
-        moveDirection = (forward * vertical + right * horizontal).normalized;
-
-        // Move character
-        if (moveDirection.magnitude > 0.1f && !isInteracting)
-        {
-            // Rotate character to face movement direction
-            transform.rotation = Quaternion.RotateTowards(
-                transform.rotation,
-                Quaternion.LookRotation(moveDirection),
-                rotationSpeed * Time.deltaTime
-            );
-
-            // Apply movement
-            controller.Move(moveDirection * moveSpeed * Time.deltaTime);
+            // Lock cursor for combat
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
         }
 
-        // Apply gravity
-        controller.Move(Vector3.down * 9.81f * Time.deltaTime);
-    }
+        private void Update()
+        {
+            // Handle menu inputs first
+            HandleMenuInput();
 
-    void HandleInteraction()
-    {
-        if (Input.GetKeyDown(KeyCode.E))
+            // Only process gameplay inputs if no menu is open
+            if (!isMenuOpen)
+            {
+                HandleMovement();
+                HandleRotation();
+                HandleInteractions();
+                HandleCombat();
+            }
+        }
+
+        private void HandleMenuInput()
+        {
+            // Character menu
+            if (Input.GetKeyDown(characterMenuKey))
+            {
+                ToggleCharacterMenu();
+            }
+
+            // Inventory menu (placeholder)
+            if (Input.GetKeyDown(inventoryKey))
+            {
+                // TODO: Implement inventory menu
+                Debug.Log("Inventory not implemented yet");
+            }
+
+            // Map menu (placeholder)
+            if (Input.GetKeyDown(mapKey))
+            {
+                // TODO: Implement map menu
+                Debug.Log("Map not implemented yet");
+            }
+
+            // Timeline menu
+            if (Input.GetKeyDown(timelineKey))
+            {
+                if (timelineUI != null)
+                {
+                    timelineUI.Toggle();
+                    SetMenuOpen(timelineUI.gameObject.activeSelf);
+                }
+            }
+        }
+
+        private void HandleMovement()
+        {
+            float horizontal = Input.GetAxisRaw("Horizontal");
+            float vertical = Input.GetAxisRaw("Vertical");
+
+            Vector3 movement = new Vector3(horizontal, 0f, vertical).normalized;
+            rb.MovePosition(transform.position + movement * moveSpeed * Time.deltaTime);
+        }
+
+        private void HandleRotation()
+        {
+            float mouseX = Input.GetAxis("Mouse X");
+            transform.Rotate(Vector3.up * mouseX * rotationSpeed * Time.deltaTime);
+        }
+
+        private void HandleInteractions()
         {
             // Check for interactable objects
-            Collider[] colliders = Physics.OverlapSphere(transform.position, interactionRange, interactionMask);
-            
-            foreach (Collider collider in colliders)
+            Ray ray = new Ray(transform.position, transform.forward);
+            RaycastHit hit;
+
+            if (Physics.Raycast(ray, out hit, interactionRange))
             {
-                // Check for different interaction types
-                if (collider.CompareTag("FarmPlot"))
+                // Handle farm plot interactions
+                FarmPlot farmPlot = hit.collider.GetComponent<FarmPlot>();
+                if (farmPlot != null)
                 {
-                    StartFarming(collider.gameObject);
+                    currentFarmPlot = farmPlot;
+                    HandleFarmingInput();
                 }
-                else if (collider.CompareTag("Homestead"))
+                else
                 {
-                    StartBuilding(collider.gameObject);
+                    currentFarmPlot = null;
                 }
-                else if (collider.CompareTag("FirstGuide"))
+
+                // Handle workbench interactions
+                Workbench workbench = hit.collider.GetComponent<Workbench>();
+                if (workbench != null)
                 {
-                    InteractWithGuide(collider.gameObject);
+                    currentWorkbench = workbench;
+                    if (Input.GetKeyDown(KeyCode.E))
+                    {
+                        workbench.OnInteractionRangeEntered(gameObject);
+                        SetMenuOpen(true);
+                    }
+                }
+                else if (currentWorkbench != null)
+                {
+                    currentWorkbench.OnInteractionRangeExited(gameObject);
+                    currentWorkbench = null;
+                }
+
+                // Handle resource node interactions
+                ResourceNode resourceNode = hit.collider.GetComponent<ResourceNode>();
+                if (resourceNode != null)
+                {
+                    currentResourceNode = resourceNode;
+                    if (Input.GetKeyDown(KeyCode.E))
+                    {
+                        resourceNode.Interact();
+                    }
+                }
+                else
+                {
+                    currentResourceNode = null;
+                }
+            }
+            else
+            {
+                currentFarmPlot = null;
+                if (currentWorkbench != null)
+                {
+                    currentWorkbench.OnInteractionRangeExited(gameObject);
+                    currentWorkbench = null;
+                }
+                currentResourceNode = null;
+            }
+        }
+
+        private void HandleFarmingInput()
+        {
+            if (currentFarmPlot == null)
+                return;
+
+            if (Input.GetKeyDown(plowKey) && currentFarmPlot.CanPlow())
+            {
+                currentFarmPlot.Plow();
+            }
+            else if (Input.GetKeyDown(waterKey) && currentFarmPlot.CanWater())
+            {
+                currentFarmPlot.Water();
+            }
+            else if (Input.GetKeyDown(plantKey))
+            {
+                // For now, just try to plant a basic crop
+                // You could add a crop selection UI later
+                currentFarmPlot.Plant("Wheat");
+            }
+            else if (Input.GetKeyDown(harvestKey) && currentFarmPlot.CanHarvest())
+            {
+                currentFarmPlot.Harvest();
+            }
+        }
+
+        private void HandleCombat()
+        {
+            if (combat != null && Input.GetMouseButtonDown(0))
+            {
+                combat.Attack();
+            }
+        }
+
+        private void ToggleCharacterMenu()
+        {
+            if (characterMenu != null)
+            {
+                if (characterMenu.gameObject.activeSelf)
+                {
+                    characterMenu.Hide();
+                    SetMenuOpen(false);
+                }
+                else
+                {
+                    characterMenu.Show();
+                    SetMenuOpen(true);
                 }
             }
         }
-    }
 
-    void HandleFarming()
-    {
-        if (isFarming)
+        public void SetMenuOpen(bool open)
         {
-            farmingProgress += Time.deltaTime;
-            
-            if (farmingProgress >= farmingTime)
-            {
-                CompleteFarming();
-            }
-
-            // Cancel farming if moved
-            if (moveDirection.magnitude > 0.1f)
-            {
-                CancelFarming();
-            }
-        }
-    }
-
-    void HandleBuilding()
-    {
-        if (isBuilding)
-        {
-            buildProgress += Time.deltaTime;
-            
-            if (buildProgress >= buildTime)
-            {
-                CompleteBuilding();
-            }
-
-            // Cancel building if moved
-            if (moveDirection.magnitude > 0.1f)
-            {
-                CancelBuilding();
-            }
-        }
-    }
-
-    void StartFarming(GameObject farmPlot)
-    {
-        isFarming = true;
-        isInteracting = true;
-        farmingProgress = 0f;
-        
-        // Notify UI or show progress bar
-        if (GuiderMessageUI.Instance != null)
-        {
-            GuiderMessageUI.Instance.ShowMessage("Tending to crops...");
-        }
-    }
-
-    void CompleteFarming()
-    {
-        isFarming = false;
-        isInteracting = false;
-        
-        // Grant neural network experience for farming
-        var neuralNetwork = GetComponent<NeuralNetwork>();
-        if (neuralNetwork != null)
-        {
-            neuralNetwork.GainExperience(5f); // Farming contributes to consciousness
+            isMenuOpen = open;
+            ToggleCursor(open);
         }
 
-        if (GuiderMessageUI.Instance != null)
+        public void ToggleCursor(bool show)
         {
-            GuiderMessageUI.Instance.ShowMessage("Farming complete!");
-        }
-    }
-
-    void CancelFarming()
-    {
-        isFarming = false;
-        isInteracting = false;
-        farmingProgress = 0f;
-    }
-
-    void StartBuilding(GameObject homestead)
-    {
-        isBuilding = true;
-        isInteracting = true;
-        buildProgress = 0f;
-        
-        if (GuiderMessageUI.Instance != null)
-        {
-            GuiderMessageUI.Instance.ShowMessage("Building homestead...");
-        }
-    }
-
-    void CompleteBuilding()
-    {
-        isBuilding = false;
-        isInteracting = false;
-        
-        // Grant neural network experience for building
-        var neuralNetwork = GetComponent<NeuralNetwork>();
-        if (neuralNetwork != null)
-        {
-            neuralNetwork.GainExperience(10f); // Building contributes more to consciousness
+            Cursor.lockState = show ? CursorLockMode.None : CursorLockMode.Locked;
+            Cursor.visible = show;
         }
 
-        if (GuiderMessageUI.Instance != null)
+        public bool IsMenuOpen()
         {
-            GuiderMessageUI.Instance.ShowMessage("Construction complete!");
+            return isMenuOpen;
         }
-    }
 
-    void CancelBuilding()
-    {
-        isBuilding = false;
-        isInteracting = false;
-        buildProgress = 0f;
-    }
-
-    void InteractWithGuide(GameObject guide)
-    {
-        FirstGuide firstGuide = guide.GetComponent<FirstGuide>();
-        if (firstGuide != null)
+        private void OnDrawGizmos()
         {
-            firstGuide.OnPlayerInteraction(gameObject);
+            // Draw interaction range
+            Gizmos.color = Color.yellow;
+            Gizmos.DrawWireSphere(transform.position, interactionRange);
         }
-    }
 
-    void OnDrawGizmosSelected()
-    {
-        // Draw interaction range
-        Gizmos.color = Color.yellow;
-        Gizmos.DrawWireSphere(transform.position, interactionRange);
-    }
-
-    // Called when player dies
-    public void OnDeath()
-    {
-        // Find respawn manager
-        RespawnManager respawnManager = FindObjectOfType<RespawnManager>();
-        if (respawnManager != null)
+        public FarmPlot GetCurrentFarmPlot()
         {
-            respawnManager.RespawnPlayer(gameObject);
+            return currentFarmPlot;
+        }
+
+        public Workbench GetCurrentWorkbench()
+        {
+            return currentWorkbench;
+        }
+
+        public ResourceNode GetCurrentResourceNode()
+        {
+            return currentResourceNode;
         }
     }
 }

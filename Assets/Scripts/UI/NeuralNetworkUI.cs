@@ -1,219 +1,227 @@
 using UnityEngine;
 using UnityEngine.UI;
+using TMPro;
 using System.Collections.Generic;
 
-public class NeuralNetworkUI : MonoBehaviour
+namespace REcreationOfSpace.UI
 {
-    [System.Serializable]
-    public class NodeUI
+    public class NeuralNetworkUI : MonoBehaviour
     {
-        public string nodeName;
-        public RectTransform nodeRect;
-        public Image fillImage;
-        public Text developmentText;
-        public Image lockIcon;
-    }
-
-    [Header("UI References")]
-    public GameObject nodeUIPrefab;
-    public RectTransform nodesContainer;
-    public Text totalDevelopmentText;
-    public Image freedomProgressBar;
-
-    [Header("Visual Settings")]
-    public float nodeSpacing = 100f;
-    public Color lockedColor = new Color(0.5f, 0.5f, 0.5f, 0.5f);
-    public Color unlockedColor = new Color(1f, 1f, 1f, 1f);
-    public Color completedColor = new Color(0f, 1f, 0f, 1f);
-
-    private Dictionary<string, NodeUI> nodeUIs = new Dictionary<string, NodeUI>();
-    private NeuralNetwork neuralNetwork;
-    private LineRenderer[] connectionLines;
-
-    void Start()
-    {
-        neuralNetwork = FindObjectOfType<NeuralNetwork>();
-        if (neuralNetwork != null)
+        [System.Serializable]
+        private class NeuronUI
         {
-            InitializeUI();
-        }
-    }
-
-    void InitializeUI()
-    {
-        // Create node UIs
-        var nodes = neuralNetwork.GetUnlockedNodes();
-        var developments = neuralNetwork.GetNodeDevelopments();
-
-        float startY = 200f;
-        float currentY = startY;
-
-        foreach (var nodeName in nodes)
-        {
-            CreateNodeUI(nodeName, developments[nodeName], new Vector2(0, currentY));
-            currentY -= nodeSpacing;
+            public string id;
+            public RectTransform rect;
+            public Image background;
+            public TextMeshProUGUI valueText;
+            public List<LineRenderer> connections = new List<LineRenderer>();
         }
 
-        // Create connection lines
-        CreateConnectionLines();
+        [Header("UI Elements")]
+        [SerializeField] private GameObject neuronPrefab;
+        [SerializeField] private GameObject connectionPrefab;
+        [SerializeField] private RectTransform networkContainer;
+        [SerializeField] private float updateInterval = 0.1f;
 
-        // Initial update
-        UpdateDisplay();
-    }
+        [Header("Layout")]
+        [SerializeField] private float layerSpacing = 200f;
+        [SerializeField] private float neuronSpacing = 100f;
+        [SerializeField] private Vector2 neuronSize = new Vector2(80f, 80f);
 
-    void CreateNodeUI(string nodeName, float development, Vector2 position)
-    {
-        if (nodeUIPrefab == null || nodesContainer == null) return;
+        [Header("Visuals")]
+        [SerializeField] private Color positiveColor = Color.green;
+        [SerializeField] private Color negativeColor = Color.red;
+        [SerializeField] private Color neutralColor = Color.gray;
+        [SerializeField] private bool showValues = true;
+        [SerializeField] private string valueFormat = "F2";
 
-        // Instantiate node UI
-        GameObject nodeObj = Instantiate(nodeUIPrefab, nodesContainer);
-        RectTransform rect = nodeObj.GetComponent<RectTransform>();
-        rect.anchoredPosition = position;
+        private Dictionary<string, NeuronUI> neuronUIs = new Dictionary<string, NeuronUI>();
+        private NeuralNetwork targetNetwork;
+        private float updateTimer;
 
-        // Setup node components
-        NodeUI nodeUI = new NodeUI();
-        nodeUI.nodeName = nodeName;
-        nodeUI.nodeRect = rect;
-        nodeUI.fillImage = nodeObj.transform.Find("FillImage")?.GetComponent<Image>();
-        nodeUI.developmentText = nodeObj.transform.Find("DevelopmentText")?.GetComponent<Text>();
-        nodeUI.lockIcon = nodeObj.transform.Find("LockIcon")?.GetComponent<Image>();
-
-        // Set node name
-        Text nameText = nodeObj.transform.Find("NameText")?.GetComponent<Text>();
-        if (nameText != null)
+        private void Start()
         {
-            nameText.text = nodeName;
-        }
-
-        nodeUIs[nodeName] = nodeUI;
-    }
-
-    void CreateConnectionLines()
-    {
-        // Create lines between dependent nodes
-        List<LineRenderer> lines = new List<LineRenderer>();
-        
-        foreach (var node in neuralNetwork.nodes)
-        {
-            if (node.dependencies != null)
+            // Find neural network
+            targetNetwork = FindObjectOfType<NeuralNetwork>();
+            if (targetNetwork != null)
             {
-                foreach (var dependency in node.dependencies)
+                CreateNetworkVisualization();
+            }
+        }
+
+        private void Update()
+        {
+            if (targetNetwork == null)
+                return;
+
+            updateTimer += Time.deltaTime;
+            if (updateTimer >= updateInterval)
+            {
+                updateTimer = 0f;
+                UpdateVisualization();
+            }
+        }
+
+        private void CreateNetworkVisualization()
+        {
+            ClearVisualization();
+
+            var networkData = targetNetwork.GetNetworkData();
+            if (networkData == null || networkData.neurons == null)
+                return;
+
+            // Group neurons by layer
+            Dictionary<string, List<NeuralNetwork.Neuron>> layers = new Dictionary<string, List<NeuralNetwork.Neuron>>();
+            foreach (var neuron in networkData.neurons)
+            {
+                string layer = neuron.id.Split('_')[0];
+                if (!layers.ContainsKey(layer))
                 {
-                    if (nodeUIs.ContainsKey(node.name) && nodeUIs.ContainsKey(dependency))
-                    {
-                        GameObject lineObj = new GameObject("ConnectionLine");
-                        lineObj.transform.SetParent(transform);
-                        
-                        LineRenderer line = lineObj.AddComponent<LineRenderer>();
-                        line.material = new Material(Shader.Find("Sprites/Default"));
-                        line.startWidth = 2f;
-                        line.endWidth = 2f;
-                        line.positionCount = 2;
-                        
-                        lines.Add(line);
-                    }
+                    layers[layer] = new List<NeuralNetwork.Neuron>();
+                }
+                layers[layer].Add(neuron);
+            }
+
+            // Create neuron UIs
+            float xOffset = 0f;
+            foreach (var layer in new[] { "input", "hidden", "output" })
+            {
+                if (!layers.ContainsKey(layer))
+                    continue;
+
+                var neurons = layers[layer];
+                float yOffset = -(neurons.Count - 1) * neuronSpacing * 0.5f;
+
+                foreach (var neuron in neurons)
+                {
+                    CreateNeuronUI(neuron, new Vector2(xOffset, yOffset));
+                    yOffset += neuronSpacing;
+                }
+
+                xOffset += layerSpacing;
+            }
+
+            // Create connections
+            foreach (var neuron in networkData.neurons)
+            {
+                for (int i = 0; i < neuron.connections.Count; i++)
+                {
+                    CreateConnectionUI(neuron.connections[i], neuron.id, neuron.weights[i]);
                 }
             }
         }
 
-        connectionLines = lines.ToArray();
-        UpdateConnectionLines();
-    }
-
-    void UpdateConnectionLines()
-    {
-        if (connectionLines == null) return;
-
-        int lineIndex = 0;
-        foreach (var node in neuralNetwork.nodes)
+        private void CreateNeuronUI(NeuralNetwork.Neuron neuron, Vector2 position)
         {
-            if (node.dependencies != null)
+            if (neuronPrefab == null || networkContainer == null)
+                return;
+
+            GameObject neuronObj = Instantiate(neuronPrefab, networkContainer);
+            RectTransform rect = neuronObj.GetComponent<RectTransform>();
+            rect.anchoredPosition = position;
+            rect.sizeDelta = neuronSize;
+
+            NeuronUI neuronUI = new NeuronUI
             {
-                foreach (var dependency in node.dependencies)
+                id = neuron.id,
+                rect = rect,
+                background = neuronObj.GetComponent<Image>(),
+                valueText = neuronObj.GetComponentInChildren<TextMeshProUGUI>()
+            };
+
+            if (neuronUI.valueText != null)
+            {
+                neuronUI.valueText.gameObject.SetActive(showValues);
+            }
+
+            neuronUIs[neuron.id] = neuronUI;
+        }
+
+        private void CreateConnectionUI(string fromId, string toId, float weight)
+        {
+            if (!neuronUIs.ContainsKey(fromId) || !neuronUIs.ContainsKey(toId))
+                return;
+
+            GameObject connectionObj = Instantiate(connectionPrefab, networkContainer);
+            LineRenderer line = connectionObj.GetComponent<LineRenderer>();
+            if (line != null)
+            {
+                // Set line color based on weight
+                Color color = weight > 0 ? positiveColor : negativeColor;
+                color.a = Mathf.Abs(weight);
+                line.startColor = line.endColor = color;
+
+                // Add to from neuron's connections
+                neuronUIs[toId].connections.Add(line);
+            }
+        }
+
+        private void UpdateVisualization()
+        {
+            var networkData = targetNetwork.GetNetworkData();
+            if (networkData == null || networkData.neurons == null)
+                return;
+
+            foreach (var neuron in networkData.neurons)
+            {
+                if (!neuronUIs.ContainsKey(neuron.id))
+                    continue;
+
+                var neuronUI = neuronUIs[neuron.id];
+
+                // Update color based on value
+                if (neuronUI.background != null)
                 {
-                    if (nodeUIs.ContainsKey(node.name) && nodeUIs.ContainsKey(dependency) && lineIndex < connectionLines.Length)
-                    {
-                        Vector3 start = nodeUIs[dependency].nodeRect.position;
-                        Vector3 end = nodeUIs[node.name].nodeRect.position;
-                        
-                        connectionLines[lineIndex].SetPosition(0, start);
-                        connectionLines[lineIndex].SetPosition(1, end);
-                        
-                        // Color based on development
-                        float progress = neuralNetwork.GetNodeDevelopment(dependency) / 100f;
-                        connectionLines[lineIndex].startColor = Color.Lerp(lockedColor, completedColor, progress);
-                        connectionLines[lineIndex].endColor = connectionLines[lineIndex].startColor;
-                        
-                        lineIndex++;
-                    }
+                    Color color = neuron.value > 0 ? positiveColor : (neuron.value < 0 ? negativeColor : neutralColor);
+                    color.a = Mathf.Abs(neuron.value);
+                    neuronUI.background.color = color;
+                }
+
+                // Update value text
+                if (neuronUI.valueText != null && showValues)
+                {
+                    neuronUI.valueText.text = neuron.value.ToString(valueFormat);
+                }
+
+                // Update connection positions
+                foreach (var line in neuronUI.connections)
+                {
+                    UpdateConnectionPosition(line, neuronUI.rect);
                 }
             }
         }
-    }
 
-    public void UpdateDisplay()
-    {
-        if (neuralNetwork == null) return;
-
-        foreach (var nodeUI in nodeUIs.Values)
+        private void UpdateConnectionPosition(LineRenderer line, RectTransform toRect)
         {
-            float development = neuralNetwork.GetNodeDevelopment(nodeUI.nodeName);
-            bool isUnlocked = neuralNetwork.IsNodeUnlocked(nodeUI.nodeName);
+            if (line == null)
+                return;
 
-            // Update fill
-            if (nodeUI.fillImage != null)
-            {
-                nodeUI.fillImage.fillAmount = development / 100f;
-                nodeUI.fillImage.color = Color.Lerp(
-                    isUnlocked ? unlockedColor : lockedColor,
-                    completedColor,
-                    development / 100f
-                );
-            }
-
-            // Update text
-            if (nodeUI.developmentText != null)
-            {
-                nodeUI.developmentText.text = $"{Mathf.Round(development)}%";
-            }
-
-            // Update lock icon
-            if (nodeUI.lockIcon != null)
-            {
-                nodeUI.lockIcon.enabled = !isUnlocked;
-            }
+            Vector3[] positions = new Vector3[2];
+            line.GetPositions(positions);
+            positions[1] = toRect.position;
+            line.SetPositions(positions);
         }
 
-        // Update total development
-        if (totalDevelopmentText != null)
+        private void ClearVisualization()
         {
-            float total = neuralNetwork.GetTotalDevelopment();
-            totalDevelopmentText.text = $"Total Development: {Mathf.Round(total)}%";
-        }
-
-        // Update freedom progress
-        if (freedomProgressBar != null)
-        {
-            float freedom = neuralNetwork.GetFreedomLevel();
-            freedomProgressBar.fillAmount = freedom / 100f;
-        }
-
-        // Update connection lines
-        UpdateConnectionLines();
-    }
-
-    void OnDestroy()
-    {
-        // Cleanup connection lines
-        if (connectionLines != null)
-        {
-            foreach (var line in connectionLines)
+            foreach (var neuronUI in neuronUIs.Values)
             {
-                if (line != null)
+                foreach (var connection in neuronUI.connections)
                 {
-                    Destroy(line.gameObject);
+                    if (connection != null)
+                        Destroy(connection.gameObject);
                 }
+
+                if (neuronUI.rect != null)
+                    Destroy(neuronUI.rect.gameObject);
             }
+
+            neuronUIs.Clear();
+        }
+
+        private void OnDestroy()
+        {
+            ClearVisualization();
         }
     }
 }

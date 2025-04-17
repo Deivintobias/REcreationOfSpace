@@ -1,237 +1,205 @@
 using UnityEngine;
 using System.Collections.Generic;
 
-public class NeuralNetwork : MonoBehaviour
+namespace REcreationOfSpace.Character
 {
-    [System.Serializable]
-    public class NeuralNode
+    public class NeuralNetwork : MonoBehaviour
     {
-        public string name;
-        public float development;
-        public float maxDevelopment = 100f;
-        public string[] dependencies;
-        public bool isUnlocked;
-    }
-
-    [Header("Neural Network Settings")]
-    public float baseGrowthRate = 1f;
-    public float experienceMultiplier = 1f;
-
-    [Header("Network Nodes")]
-    public List<NeuralNode> nodes = new List<NeuralNode>()
-    {
-        new NeuralNode { 
-            name = "Basic Consciousness",
-            development = 0f,
-            isUnlocked = true,
-            dependencies = new string[] {}
-        },
-        new NeuralNode {
-            name = "Self Awareness",
-            development = 0f,
-            dependencies = new string[] { "Basic Consciousness" }
-        },
-        new NeuralNode {
-            name = "Critical Thinking",
-            development = 0f,
-            dependencies = new string[] { "Self Awareness" }
-        },
-        new NeuralNode {
-            name = "Emotional Intelligence",
-            development = 0f,
-            dependencies = new string[] { "Self Awareness" }
-        },
-        new NeuralNode {
-            name = "Creative Expression",
-            development = 0f,
-            dependencies = new string[] { "Emotional Intelligence", "Critical Thinking" }
-        },
-        new NeuralNode {
-            name = "True Freedom",
-            development = 0f,
-            dependencies = new string[] { 
-                "Creative Expression",
-                "Critical Thinking",
-                "Emotional Intelligence"
-            }
-        }
-    };
-
-    private Dictionary<string, NeuralNode> nodeMap;
-    private float totalDevelopment = 0f;
-
-    void Start()
-    {
-        InitializeNetwork();
-        UpdateNodeMap();
-        CheckNodeUnlocks();
-    }
-
-    void InitializeNetwork()
-    {
-        nodeMap = new Dictionary<string, NeuralNode>();
-        foreach (var node in nodes)
+        [System.Serializable]
+        public class Neuron
         {
-            nodeMap[node.name] = node;
+            public string id;
+            public float value;
+            public float bias;
+            public List<string> connections = new List<string>();
+            public List<float> weights = new List<float>();
         }
-    }
 
-    public void GainExperience(float amount)
-    {
-        // Apply experience to unlocked nodes
-        foreach (var node in nodes)
+        [Header("Network Settings")]
+        [SerializeField] private int inputNeurons = 8;
+        [SerializeField] private int hiddenNeurons = 12;
+        [SerializeField] private int outputNeurons = 4;
+        [SerializeField] private float learningRate = 0.1f;
+        [SerializeField] private float mutationRate = 0.1f;
+
+        private List<Neuron> neurons = new List<Neuron>();
+        private Dictionary<string, int> neuronIndices = new Dictionary<string, int>();
+
+        private void Awake()
         {
-            if (node.isUnlocked && node.development < node.maxDevelopment)
+            InitializeNetwork();
+        }
+
+        private void InitializeNetwork()
+        {
+            neurons.Clear();
+            neuronIndices.Clear();
+
+            // Create input neurons
+            for (int i = 0; i < inputNeurons; i++)
             {
-                float growth = amount * baseGrowthRate * experienceMultiplier;
-                node.development = Mathf.Min(node.development + growth, node.maxDevelopment);
+                CreateNeuron($"input_{i}");
             }
-        }
 
-        UpdateTotalDevelopment();
-        CheckNodeUnlocks();
-        NotifyUI();
-    }
-
-    public void DevelopNode(string nodeName, float amount)
-    {
-        if (nodeMap.ContainsKey(nodeName))
-        {
-            var node = nodeMap[nodeName];
-            if (node.isUnlocked)
+            // Create hidden neurons
+            for (int i = 0; i < hiddenNeurons; i++)
             {
-                node.development = Mathf.Min(node.development + amount, node.maxDevelopment);
-                UpdateTotalDevelopment();
-                CheckNodeUnlocks();
-                NotifyUI();
-            }
-        }
-    }
-
-    private void CheckNodeUnlocks()
-    {
-        bool anyUnlocked = false;
-
-        foreach (var node in nodes)
-        {
-            if (!node.isUnlocked && AreNodeDependenciesMet(node))
-            {
-                node.isUnlocked = true;
-                anyUnlocked = true;
+                var neuron = CreateNeuron($"hidden_{i}");
                 
-                // Notify about unlocked node
-                if (GuiderMessageUI.Instance != null)
+                // Connect to all input neurons
+                for (int j = 0; j < inputNeurons; j++)
                 {
-                    GuiderMessageUI.Instance.ShowMessage($"Neural Network expanded: {node.name} unlocked!");
+                    ConnectNeurons($"input_{j}", neuron.id);
+                }
+            }
+
+            // Create output neurons
+            for (int i = 0; i < outputNeurons; i++)
+            {
+                var neuron = CreateNeuron($"output_{i}");
+                
+                // Connect to all hidden neurons
+                for (int j = 0; j < hiddenNeurons; j++)
+                {
+                    ConnectNeurons($"hidden_{j}", neuron.id);
                 }
             }
         }
 
-        if (anyUnlocked)
+        private Neuron CreateNeuron(string id)
         {
-            NotifyUI();
-        }
-    }
-
-    private bool AreNodeDependenciesMet(NeuralNode node)
-    {
-        if (node.dependencies == null || node.dependencies.Length == 0)
-            return true;
-
-        foreach (string dependency in node.dependencies)
-        {
-            if (nodeMap.ContainsKey(dependency))
+            var neuron = new Neuron
             {
-                var dependencyNode = nodeMap[dependency];
-                if (!dependencyNode.isUnlocked || dependencyNode.development < 50f)
+                id = id,
+                value = 0f,
+                bias = Random.Range(-1f, 1f)
+            };
+
+            neurons.Add(neuron);
+            neuronIndices[id] = neurons.Count - 1;
+            return neuron;
+        }
+
+        private void ConnectNeurons(string fromId, string toId)
+        {
+            if (!neuronIndices.ContainsKey(fromId) || !neuronIndices.ContainsKey(toId))
+                return;
+
+            var toNeuron = neurons[neuronIndices[toId]];
+            toNeuron.connections.Add(fromId);
+            toNeuron.weights.Add(Random.Range(-1f, 1f));
+        }
+
+        public float[] ProcessInputs(float[] inputs)
+        {
+            if (inputs.Length != inputNeurons)
+                return null;
+
+            // Set input values
+            for (int i = 0; i < inputs.Length; i++)
+            {
+                neurons[i].value = inputs[i];
+            }
+
+            // Process hidden and output neurons
+            for (int i = inputNeurons; i < neurons.Count; i++)
+            {
+                var neuron = neurons[i];
+                float sum = neuron.bias;
+
+                for (int j = 0; j < neuron.connections.Count; j++)
                 {
-                    return false;
+                    var fromNeuron = neurons[neuronIndices[neuron.connections[j]]];
+                    sum += fromNeuron.value * neuron.weights[j];
+                }
+
+                neuron.value = Activate(sum);
+            }
+
+            // Get output values
+            float[] outputs = new float[outputNeurons];
+            int outputStart = neurons.Count - outputNeurons;
+            for (int i = 0; i < outputNeurons; i++)
+            {
+                outputs[i] = neurons[outputStart + i].value;
+            }
+
+            return outputs;
+        }
+
+        private float Activate(float x)
+        {
+            // Hyperbolic tangent activation function
+            return Mathf.Tanh(x);
+        }
+
+        public void Mutate()
+        {
+            foreach (var neuron in neurons)
+            {
+                if (Random.value < mutationRate)
+                {
+                    neuron.bias += Random.Range(-0.5f, 0.5f);
+                }
+
+                for (int i = 0; i < neuron.weights.Count; i++)
+                {
+                    if (Random.value < mutationRate)
+                    {
+                        neuron.weights[i] += Random.Range(-0.5f, 0.5f);
+                    }
                 }
             }
         }
 
-        return true;
-    }
-
-    private void UpdateTotalDevelopment()
-    {
-        totalDevelopment = 0f;
-        float maxPossible = 0f;
-
-        foreach (var node in nodes)
+        public void Learn(float[] expectedOutputs)
         {
-            if (node.isUnlocked)
+            if (expectedOutputs.Length != outputNeurons)
+                return;
+
+            int outputStart = neurons.Count - outputNeurons;
+            
+            // Update output neurons
+            for (int i = 0; i < outputNeurons; i++)
             {
-                totalDevelopment += node.development;
-                maxPossible += node.maxDevelopment;
+                var neuron = neurons[outputStart + i];
+                float error = expectedOutputs[i] - neuron.value;
+
+                // Update weights
+                for (int j = 0; j < neuron.connections.Count; j++)
+                {
+                    var fromNeuron = neurons[neuronIndices[neuron.connections[j]]];
+                    float delta = learningRate * error * fromNeuron.value;
+                    neuron.weights[j] += delta;
+                }
+
+                // Update bias
+                neuron.bias += learningRate * error;
             }
         }
 
-        // Convert to percentage
-        totalDevelopment = (maxPossible > 0) ? (totalDevelopment / maxPossible) * 100f : 0f;
-    }
-
-    private void NotifyUI()
-    {
-        var ui = FindObjectOfType<NeuralNetworkUI>();
-        if (ui != null)
+        public NeuralNetworkData GetNetworkData()
         {
-            ui.UpdateDisplay();
-        }
-    }
-
-    public float GetNodeDevelopment(string nodeName)
-    {
-        if (nodeMap.ContainsKey(nodeName))
-        {
-            return nodeMap[nodeName].development;
-        }
-        return 0f;
-    }
-
-    public bool IsNodeUnlocked(string nodeName)
-    {
-        if (nodeMap.ContainsKey(nodeName))
-        {
-            return nodeMap[nodeName].isUnlocked;
-        }
-        return false;
-    }
-
-    public float GetTotalDevelopment()
-    {
-        return totalDevelopment;
-    }
-
-    public float GetFreedomLevel()
-    {
-        if (nodeMap.ContainsKey("True Freedom"))
-        {
-            return nodeMap["True Freedom"].development;
-        }
-        return 0f;
-    }
-
-    public List<string> GetUnlockedNodes()
-    {
-        List<string> unlockedNodes = new List<string>();
-        foreach (var node in nodes)
-        {
-            if (node.isUnlocked)
+            return new NeuralNetworkData
             {
-                unlockedNodes.Add(node.name);
+                neurons = new List<Neuron>(neurons)
+            };
+        }
+
+        public void LoadNetworkData(NeuralNetworkData data)
+        {
+            neurons = new List<Neuron>(data.neurons);
+            neuronIndices.Clear();
+            for (int i = 0; i < neurons.Count; i++)
+            {
+                neuronIndices[neurons[i].id] = i;
             }
         }
-        return unlockedNodes;
     }
 
-    public Dictionary<string, float> GetNodeDevelopments()
+    [System.Serializable]
+    public class NeuralNetworkData
     {
-        Dictionary<string, float> developments = new Dictionary<string, float>();
-        foreach (var node in nodes)
-        {
-            developments[node.name] = node.development;
-        }
-        return developments;
+        public List<Neuron> neurons;
     }
 }

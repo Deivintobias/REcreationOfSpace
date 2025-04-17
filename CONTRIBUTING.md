@@ -1,113 +1,161 @@
-# Contributing to REcreation Of Space
+# Contributing to REcreationOfSpace
 
-We love your input! We want to make contributing to REcreation Of Space as easy and transparent as possible, whether it's:
+Thank you for your interest in contributing to our project! This document provides guidelines and instructions for contributing.
 
-- Reporting a bug
-- Discussing the current state of the code
-- Submitting a fix
-- Proposing new features
-- Becoming a maintainer
+## Project Roles
 
-## We Develop with Github
-We use GitHub to host code, to track issues and feature requests, as well as accept pull requests.
+### Prompt Engineering
+The project's prompt engineering is led by Eivin Tobias, who designs and refines the prompts that guide the AI's development process. This role is crucial for:
+- Crafting effective prompts for AI-assisted development
+- Ensuring consistent and high-quality AI outputs
+- Optimizing AI interactions for specific development tasks
+- Maintaining prompt documentation and best practices
 
-## We Use [Github Flow](https://guides.github.com/introduction/flow/index.html)
-Pull requests are the best way to propose changes to the codebase. We actively welcome your pull requests:
+## Getting Started
 
-1. Fork the repo and create your branch from `main`.
-2. If you've added code that should be tested, add tests.
-3. If you've changed APIs, update the documentation.
-4. Ensure the test suite passes.
-5. Make sure your code lints.
-6. Issue that pull request!
-
-## Any contributions you make will be under the MIT Software License
-In short, when you submit code changes, your submissions are understood to be under the same [MIT License](http://choosealicense.com/licenses/mit/) that covers the project. Feel free to contact the maintainers if that's a concern.
-
-## Report bugs using Github's [issue tracker](https://github.com/yourusername/recreation-of-space/issues)
-We use GitHub issues to track public bugs. Report a bug by [opening a new issue](https://github.com/yourusername/recreation-of-space/issues/new); it's that easy!
-
-## Write bug reports with detail, background, and sample code
-
-**Great Bug Reports** tend to have:
-
-- A quick summary and/or background
-- Steps to reproduce
-  - Be specific!
-  - Give sample code if you can.
-- What you expected would happen
-- What actually happens
-- Notes (possibly including why you think this might be happening, or stuff you tried that didn't work)
+1. Fork the repository
+2. Clone your fork locally
+3. Set up Unity 2022.x or later
+4. Open the project and verify it runs
 
 ## Development Process
 
-1. Create a new branch for your feature/fix
-2. Make your changes
-3. Test thoroughly
-4. Update documentation if needed
-5. Submit pull request
+1. Create a new branch for your feature/fix:
+```bash
+git checkout -b feature/your-feature-name
+```
 
-## Code Style Guidelines
+2. Make your changes following our coding standards
+3. Test your changes thoroughly
+4. Commit your changes with clear messages
+5. Push to your fork
+6. Create a Pull Request
 
-### Unity/C# Conventions
+## Coding Standards
+
+### C# Conventions
 - Use PascalCase for class names and public members
-- Use camelCase for private members and local variables
-- Use meaningful variable names
-- Add comments for complex logic
-- Keep methods focused and concise
+- Use camelCase for private fields and local variables
+- Prefix private fields with underscore (_)
+- Use meaningful names that describe purpose
+- Add XML documentation for public methods
 
-### Project Structure
+### Unity Best Practices
+- Keep prefabs modular and reusable
+- Use SerializeField instead of public fields
+- Organize assets in appropriate folders
+- Follow Unity's component-based architecture
+- Use scriptable objects for configuration data
+
+### Script Organization
+```csharp
+using UnityEngine;
+using System.Collections;
+
+namespace REcreationOfSpace.YourNamespace
+{
+    public class YourClass : MonoBehaviour
+    {
+        [Header("Settings")]
+        [SerializeField] private float _someValue;
+
+        private void Awake()
+        {
+            // Initialization
+        }
+
+        private void Start()
+        {
+            // Setup
+        }
+
+        private void Update()
+        {
+            // Frame updates
+        }
+
+        // Public methods
+        public void DoSomething()
+        {
+        }
+
+        // Private methods
+        private void HandleSomething()
+        {
+        }
+    }
+}
 ```
-Assets/
-├── Scripts/
-│   ├── Character/     # Character-related scripts
-│   ├── Combat/        # Combat system scripts
-│   ├── Resources/     # Resource management
-│   ├── UI/           # User interface
-│   ├── World/        # World generation and management
-│   └── Setup/        # Game initialization
-├── Prefabs/          # Reusable game objects
-├── Materials/        # Material assets
-└── Scenes/          # Unity scenes
-```
 
-## Feature Requests
+## Adding New Features
 
-We love new ideas! Please use the GitHub issues tracker to submit feature requests. When proposing a new feature:
+### New Gameplay Systems
+1. Create a design document
+2. Discuss implementation approach
+3. Create necessary scripts and prefabs
+4. Add unit tests where applicable
+5. Document usage in README.md
 
-1. Explain in detail how it would work
-2. Keep the scope as narrow as possible
-3. Consider impact on existing features
-4. Consider performance implications
+### UI Components
+1. Follow Unity's UI system guidelines
+2. Ensure responsive design
+3. Support both keyboard/mouse and controller
+4. Implement proper navigation
+5. Add accessibility features
 
-## Areas for Contribution
+### Asset Creation
+1. Follow project's art style
+2. Use appropriate file formats
+3. Optimize for performance
+4. Include source files
+5. Document any third-party tools used
 
-1. Core Systems
-   - Neural Network improvements
-   - Resource system enhancements
-   - Trading mechanics
-   - Team dynamics
+## Testing
 
-2. World Building
-   - Paradise City development
-   - Sion's Crust features
-   - Sinai Space expansion
+1. Test in Unity Editor
+2. Test in built game
+3. Test different screen resolutions
+4. Test with different input methods
+5. Verify performance impact
 
-3. UI/UX
-   - Interface improvements
-   - Visual feedback
-   - Player guidance
+## Documentation
 
-4. Documentation
-   - Code documentation
-   - User guides
-   - Design documents
+- Update README.md for new features
+- Add XML documentation to public APIs
+- Include usage examples
+- Document any required setup
+- Update architecture diagrams
+
+## Pull Request Process
+
+1. Update relevant documentation
+2. Add/update unit tests if applicable
+3. Ensure all tests pass
+4. Update CHANGELOG.md
+5. Request review from maintainers
+
+## Reporting Issues
+
+1. Check existing issues first
+2. Use issue templates
+3. Include clear reproduction steps
+4. Provide system information
+5. Add relevant screenshots/videos
 
 ## Community
-- Respect fellow contributors
-- Be constructive in feedback
-- Help others learn and grow
-- Share knowledge and insights
 
-## License
-By contributing, you agree that your contributions will be licensed under its MIT License.
+- Be respectful and inclusive
+- Help others when possible
+- Share knowledge and experiences
+- Follow our Code of Conduct
+- Participate in discussions
+
+## Questions?
+
+Feel free to:
+- Open an issue for clarification
+- Join our Discord server
+- Contact maintainers directly
+- Check our documentation
+
+Thank you for contributing to REcreationOfSpace!

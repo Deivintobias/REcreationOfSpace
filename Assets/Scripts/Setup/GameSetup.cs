@@ -1,99 +1,200 @@
 using UnityEngine;
-using UnityEditor;
-using UnityEditor.SceneManagement;
+using REcreationOfSpace.Crafting;
+using REcreationOfSpace.Farming;
 
-public class GameSetup : EditorWindow
+namespace REcreationOfSpace.Setup
 {
-    [MenuItem("Game/Setup Game")]
-    public static void ShowWindow()
+    public class GameSetup : MonoBehaviour
     {
-        GetWindow<GameSetup>("Game Setup");
-    }
+        [Header("Systems")]
+        [SerializeField] private CraftingSystem craftingSystem;
+        [SerializeField] private ResourceSystem resourceSystem;
 
-    private void OnGUI()
-    {
-        GUILayout.Label("Game Setup", EditorStyles.boldLabel);
-
-        if (GUILayout.Button("1. Create Materials"))
+        private void Start()
         {
-            MaterialCreator.CreateBasicMaterials();
-            Debug.Log("Materials created successfully!");
+            SetupDefaultResources();
+            SetupCraftingRecipes();
+            SetupCropTypes();
         }
 
-        if (GUILayout.Button("2. Create Prefabs"))
+        private void SetupDefaultResources()
         {
-            PrefabCreator.CreateBasicPrefabs();
-            Debug.Log("Prefabs created successfully!");
+            if (resourceSystem == null) return;
+
+            // Add starting resources
+            var startingResources = new[]
+            {
+                new { type = "Wood", amount = 20 },
+                new { type = "Stone", amount = 15 },
+                new { type = "Iron", amount = 10 },
+                new { type = "Seeds", amount = 5 },
+                new { type = "Water", amount = 10 },
+                new { type = "Gold", amount = 0 }
+            };
+
+            foreach (var resource in startingResources)
+            {
+                resourceSystem.AddResource(resource.type, resource.amount);
+            }
         }
 
-        if (GUILayout.Button("3. Create Test Scene"))
+        private void SetupCraftingRecipes()
         {
-            CreateTestScene();
-            Debug.Log("Test scene created successfully!");
+            if (craftingSystem == null) return;
+
+            // Basic crafting recipes (no workbench required)
+            var basicRecipes = new[]
+            {
+                new CraftingSystem.CraftingRecipe
+                {
+                    resultItem = "Wooden Tools",
+                    resultAmount = 1,
+                    requiredItems = new[] { "Wood" },
+                    requiredAmounts = new[] { 3 },
+                    craftingTime = 2f,
+                    requiredLevel = 1
+                },
+                new CraftingSystem.CraftingRecipe
+                {
+                    resultItem = "Stone Tools",
+                    resultAmount = 1,
+                    requiredItems = new[] { "Stone", "Wood" },
+                    requiredAmounts = new[] { 3, 2 },
+                    craftingTime = 3f,
+                    requiredLevel = 2
+                }
+            };
+
+            // Smithy recipes
+            var smithyRecipes = new[]
+            {
+                new CraftingSystem.CraftingRecipe
+                {
+                    resultItem = "Iron Tools",
+                    resultAmount = 1,
+                    requiredItems = new[] { "Iron", "Wood" },
+                    requiredAmounts = new[] { 3, 2 },
+                    craftingTime = 5f,
+                    requiredWorkbench = "Smithy",
+                    requiredLevel = 3
+                },
+                new CraftingSystem.CraftingRecipe
+                {
+                    resultItem = "Iron Sword",
+                    resultAmount = 1,
+                    requiredItems = new[] { "Iron", "Wood" },
+                    requiredAmounts = new[] { 5, 2 },
+                    craftingTime = 8f,
+                    requiredWorkbench = "Smithy",
+                    requiredLevel = 4
+                }
+            };
+
+            // Alchemy recipes
+            var alchemyRecipes = new[]
+            {
+                new CraftingSystem.CraftingRecipe
+                {
+                    resultItem = "Health Potion",
+                    resultAmount = 1,
+                    requiredItems = new[] { "Herbs", "Water" },
+                    requiredAmounts = new[] { 2, 1 },
+                    craftingTime = 4f,
+                    requiredWorkbench = "Alchemy",
+                    requiredLevel = 2
+                },
+                new CraftingSystem.CraftingRecipe
+                {
+                    resultItem = "Fertilizer",
+                    resultAmount = 2,
+                    requiredItems = new[] { "Herbs", "Water", "Stone" },
+                    requiredAmounts = new[] { 1, 1, 1 },
+                    craftingTime = 3f,
+                    requiredWorkbench = "Alchemy",
+                    requiredLevel = 1
+                }
+            };
+
+            // Add all recipes to crafting system
+            foreach (var recipe in basicRecipes)
+            {
+                AddRecipeToSystem(recipe);
+            }
+            foreach (var recipe in smithyRecipes)
+            {
+                AddRecipeToSystem(recipe);
+            }
+            foreach (var recipe in alchemyRecipes)
+            {
+                AddRecipeToSystem(recipe);
+            }
         }
 
-        if (GUILayout.Button("Do All Steps"))
+        private void SetupCropTypes()
         {
-            MaterialCreator.CreateBasicMaterials();
-            PrefabCreator.CreateBasicPrefabs();
-            CreateTestScene();
-            Debug.Log("All setup steps completed successfully!");
+            // Define crop types and their properties
+            var cropTypes = new[]
+            {
+                new FarmPlot.CropData
+                {
+                    cropType = "Wheat",
+                    growthTime = 60f, // 1 minute for testing, adjust as needed
+                    growthStages = 4,
+                    requiredResources = new[] { "Seeds", "Water" },
+                    resourceAmounts = new[] { 1, 1 },
+                    harvestedResource = "Wheat",
+                    harvestAmount = 3
+                },
+                new FarmPlot.CropData
+                {
+                    cropType = "Herbs",
+                    growthTime = 45f,
+                    growthStages = 3,
+                    requiredResources = new[] { "Seeds", "Water" },
+                    resourceAmounts = new[] { 1, 2 },
+                    harvestedResource = "Herbs",
+                    harvestAmount = 2
+                },
+                new FarmPlot.CropData
+                {
+                    cropType = "Magic Mushrooms",
+                    growthTime = 90f,
+                    growthStages = 5,
+                    requiredResources = new[] { "Seeds", "Water", "Fertilizer" },
+                    resourceAmounts = new[] { 2, 2, 1 },
+                    harvestedResource = "Magic Essence",
+                    harvestAmount = 1
+                }
+            };
+
+            // Add crop types to farm plots
+            var farmPlots = FindObjectsOfType<FarmPlot>();
+            foreach (var plot in farmPlots)
+            {
+                var plotField = plot.GetType().GetField("availableCrops", 
+                    System.Reflection.BindingFlags.NonPublic | 
+                    System.Reflection.BindingFlags.Instance);
+                if (plotField != null)
+                {
+                    plotField.SetValue(plot, cropTypes);
+                }
+            }
         }
-    }
 
-    private static void CreateTestScene()
-    {
-        // Create new scene
-        EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+        private void AddRecipeToSystem(CraftingSystem.CraftingRecipe recipe)
+        {
+            var recipesField = craftingSystem.GetType().GetField("availableRecipes", 
+                System.Reflection.BindingFlags.NonPublic | 
+                System.Reflection.BindingFlags.Instance);
 
-        // Create GameManager
-        GameObject gameManager = new GameObject("GameManager");
-        GameInitializer initializer = gameManager.AddComponent<GameInitializer>();
-
-        // Assign prefabs
-        initializer.playerPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/PlayerPrefab.prefab");
-        initializer.cameraPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/CameraPrefab.prefab");
-        initializer.uiCanvasPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/UICanvasPrefab.prefab");
-        initializer.firstGuidePrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/FirstGuidePrefab.prefab");
-        initializer.paradiseCityPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/ParadiseCityPrefab.prefab");
-
-        // Add and setup WorldGenerator
-        WorldGenerator worldGen = gameManager.AddComponent<WorldGenerator>();
-        worldGen.worldSize = 1000;
-        worldGen.chunkSize = 100;
-        worldGen.maxHeight = 200f;
-        initializer.worldGenerator = worldGen;
-
-        // Add and setup LocalTerrainGenerator
-        LocalTerrainGenerator terrainGen = gameManager.AddComponent<LocalTerrainGenerator>();
-        terrainGen.localRadius = 50f;
-        terrainGen.resolution = 100;
-        initializer.terrainGenerator = terrainGen;
-
-        // Add and setup CharacterGenerator
-        CharacterGenerator charGen = gameManager.AddComponent<CharacterGenerator>();
-        initializer.characterGenerator = charGen;
-
-        // Add and setup CharacterVisualGenerator
-        CharacterVisualGenerator visualGen = gameManager.AddComponent<CharacterVisualGenerator>();
-        visualGen.characterBaseMaterial = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/SinaiCharacter.mat");
-        visualGen.glowMaterial = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/Glow.mat");
-        initializer.visualGenerator = visualGen;
-
-        // Create directional light
-        GameObject light = new GameObject("Directional Light");
-        Light lightComp = light.AddComponent<Light>();
-        lightComp.type = LightType.Directional;
-        lightComp.intensity = 1f;
-        light.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
-
-        // Create ground plane for testing
-        GameObject ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
-        ground.name = "TemporaryGround";
-        ground.transform.localScale = new Vector3(100f, 1f, 100f);
-        ground.GetComponent<Renderer>().material = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/Ground.mat");
-
-        // Save scene
-        EditorSceneManager.SaveScene(EditorSceneManager.GetActiveScene(), "Assets/Scenes/TestScene.unity");
+            if (recipesField != null)
+            {
+                var currentRecipes = (CraftingSystem.CraftingRecipe[])recipesField.GetValue(craftingSystem);
+                var newRecipes = new CraftingSystem.CraftingRecipe[currentRecipes.Length + 1];
+                currentRecipes.CopyTo(newRecipes, 0);
+                newRecipes[currentRecipes.Length] = recipe;
+                recipesField.SetValue(craftingSystem, newRecipes);
+            }
+        }
     }
 }
