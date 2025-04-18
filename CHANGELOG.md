@@ -5,6 +5,34 @@ All notable changes to REcreationOfSpace will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.0] - 2025-04-18
+
+### Added
+- Pet/Mount System
+  * Multiple companion types (Mounts, Combat Pets, Utility Pets, Special)
+  * Biblical era mounts (Horse, Camel, Donkey, Mule)
+  * Combat pets (Lion, Wolf, Eagle, Bear)
+  * Utility pets (Dove, Sheep, Ox, Goat)
+  * Special companions (Phoenix, Unicorn, Griffin, Dragon)
+  * Companion loyalty and happiness
+  * Energy and experience systems
+  * Training and leveling mechanics
+  * Companion abilities and stats
+  * Mount riding functionality
+  * Pet care and feeding system
+  * Active/inactive companion management
+
+### Added UI Features
+- Companion Interface
+  * Companion list with filtering
+  * Detailed companion stats
+  * Training progress tracking
+  * Ability management
+  * Mount controls
+  * Care and feeding interface
+  * Experience and level display
+  * Companion status monitoring
+
 ## [1.7.0] - 2025-04-18
 
 ### Added
