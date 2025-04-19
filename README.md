@@ -1,4 +1,4 @@
-# Diablo-Style RPG with Farming and Crafting
+# Topdown RPG with Farming and Crafting
 
 A top-down RPG that combines combat mechanics with farming and crafting systems, built in Unity.
 
