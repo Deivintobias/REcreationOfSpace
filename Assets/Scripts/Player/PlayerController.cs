@@ -15,6 +15,7 @@ namespace REcreationOfSpace.Player
         [SerializeField] private float rotationSpeed = 360f; // Speed for mouse rotation & WASD turn
         [SerializeField] private float interactionRange = 2f;
         [SerializeField] private LayerMask groundLayerMask; // For click-to-move raycast
+        [SerializeField] private GameObject moveIndicatorPrefab; // Prefab for click-to-move visual feedback
 
         // Obsolete KeyCode fields have been removed.
 
@@ -238,6 +239,15 @@ namespace REcreationOfSpace.Player
                 if (NavMesh.SamplePosition(hitInfo.point, out NavMeshHit navHit, 1.0f, NavMesh.AllAreas))
                 {
                     agent.SetDestination(navHit.position);
+
+                    // Instantiate the move indicator
+                    if (moveIndicatorPrefab != null)
+                    {
+                        // Instantiate slightly above the hit point to avoid z-fighting, adjust y-offset as needed
+                        Instantiate(moveIndicatorPrefab, navHit.position + Vector3.up * 0.05f, Quaternion.identity);
+                        // Consider Quaternion.LookRotation(navHit.normal) if indicator should align with ground normal
+                        // or Quaternion.Euler(90,0,0) for a decal-like sprite that's setup to be flat.
+                    }
                 }
                 else
                 {
