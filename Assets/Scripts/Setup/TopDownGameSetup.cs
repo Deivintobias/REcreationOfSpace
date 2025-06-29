@@ -1,12 +1,17 @@
 using UnityEngine;
+using UnityEngine.AI; // Added for NavMeshAgent
+using UnityEngine.InputSystem; // Added for PlayerInput configuration
 
 namespace REcreationOfSpace.Setup
 {
     public class TopDownGameSetup : MonoBehaviour
     {
-        [Header("Scene Setup")]
+        [Header("Player Setup")]
         [SerializeField] private GameObject playerPrefab;
+        [SerializeField] private InputActionAsset inputActionsAsset; // To assign in Inspector
         [SerializeField] private Vector3 playerSpawnPoint = Vector3.zero;
+
+        [Header("Scene Setup")]
         [SerializeField] private GameObject mainCameraPrefab;
         [SerializeField] private Vector3 cameraOffset = new Vector3(0, 10, -10);
 
@@ -91,6 +96,35 @@ namespace REcreationOfSpace.Setup
                 {
                     var teamSystem = player.AddComponent<TeamSystem>();
                     teamSystem.enabled = true;
+                }
+
+                // Add NavMeshAgent if not already present
+                if (!player.GetComponent<NavMeshAgent>())
+                {
+                    var agent = player.AddComponent<NavMeshAgent>();
+                    // Configure agent properties if necessary (e.g., speed, acceleration)
+                    // agent.speed = 3.5f; // Example: Set speed
+                    // agent.acceleration = 8f; // Example: Set acceleration
+                }
+
+                // Ensure and configure PlayerInput component
+                PlayerInput playerInput = player.GetComponent<PlayerInput>();
+                if (playerInput == null)
+                {
+                    playerInput = player.AddComponent<PlayerInput>();
+                }
+
+                if (inputActionsAsset != null)
+                {
+                    playerInput.actions = inputActionsAsset;
+                    playerInput.defaultControlScheme = "Keyboard&Mouse";
+                    playerInput.defaultActionMap = "Player";
+                    // playerInput.notificationBehavior = PlayerNotifications.InvokeCSharpEvents; // Optional, as PlayerController fetches actions directly
+                    playerInput.enabled = true; // Ensure it's enabled
+                }
+                else
+                {
+                    Debug.LogError("InputActionsAsset is not assigned in TopDownGameSetup. Player input will not work correctly.");
                 }
             }
         }
