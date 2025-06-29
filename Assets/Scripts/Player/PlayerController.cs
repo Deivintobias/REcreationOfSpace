@@ -16,17 +16,7 @@ namespace REcreationOfSpace.Player
         [SerializeField] private float interactionRange = 2f;
         [SerializeField] private LayerMask groundLayerMask; // For click-to-move raycast
 
-        [Header("Farming Tools")]
-        [SerializeField] private KeyCode plowKey = KeyCode.Q;
-        [SerializeField] private KeyCode waterKey = KeyCode.R;
-        [SerializeField] private KeyCode plantKey = KeyCode.F;
-        [SerializeField] private KeyCode harvestKey = KeyCode.G;
-
-        [Header("Menu Keys")]
-        [SerializeField] private KeyCode characterMenuKey = KeyCode.C;
-        [SerializeField] private KeyCode inventoryKey = KeyCode.I;
-        [SerializeField] private KeyCode mapKey = KeyCode.M;
-        [SerializeField] private KeyCode timelineKey = KeyCode.T;
+        // Obsolete KeyCode fields have been removed.
 
         // Component References
         private Rigidbody rb;
@@ -41,6 +31,15 @@ namespace REcreationOfSpace.Player
         private InputAction attackAction;
         private InputAction moveToPointAction;
         private InputAction primaryPointerPositionAction;
+        private InputAction toggleCharacterMenuAction;
+        private InputAction toggleInventoryMenuAction;
+        private InputAction toggleMapMenuAction;
+        private InputAction toggleTimelineMenuAction;
+        private InputAction interactAlternateAction;
+        private InputAction plowAction;
+        private InputAction waterAction;
+        private InputAction plantAction;
+        private InputAction harvestAction;
 
         // State
         private FarmPlot currentFarmPlot;
@@ -81,6 +80,17 @@ namespace REcreationOfSpace.Player
             moveToPointAction = playerInput.actions["MoveToPoint"];
             primaryPointerPositionAction = playerInput.actions["PrimaryPointerPosition"];
 
+            // Initialize new menu and interaction actions
+            toggleCharacterMenuAction = playerInput.actions["ToggleCharacterMenu"];
+            toggleInventoryMenuAction = playerInput.actions["ToggleInventoryMenu"];
+            toggleMapMenuAction = playerInput.actions["ToggleMapMenu"];
+            toggleTimelineMenuAction = playerInput.actions["ToggleTimelineMenu"];
+            interactAlternateAction = playerInput.actions["InteractAlternate"];
+            plowAction = playerInput.actions["Plow"];
+            waterAction = playerInput.actions["Water"];
+            plantAction = playerInput.actions["Plant"];
+            harvestAction = playerInput.actions["Harvest"];
+
             // Find menu references
             characterMenu = FindObjectOfType<CharacterMenu>();
             gameMenu = FindObjectOfType<GameMenu>();
@@ -95,28 +105,52 @@ namespace REcreationOfSpace.Player
         {
             if (moveToPointAction != null) moveToPointAction.performed += OnMoveToPointPerformed;
             if (attackAction != null) attackAction.performed += OnAttackPerformed;
-            // We'll read moveAction directly in Update for continuous movement
+
+            // Subscribe to new actions
+            if (toggleCharacterMenuAction != null) toggleCharacterMenuAction.performed += OnToggleCharacterMenuPerformed;
+            if (toggleInventoryMenuAction != null) toggleInventoryMenuAction.performed += OnToggleInventoryMenuPerformed;
+            if (toggleMapMenuAction != null) toggleMapMenuAction.performed += OnToggleMapMenuPerformed;
+            if (toggleTimelineMenuAction != null) toggleTimelineMenuAction.performed += OnToggleTimelineMenuPerformed;
+            if (interactAlternateAction != null) interactAlternateAction.performed += OnInteractAlternatePerformed;
+            if (plowAction != null) plowAction.performed += OnPlowActionPerformed;
+            if (waterAction != null) waterAction.performed += OnWaterActionPerformed;
+            if (plantAction != null) plantAction.performed += OnPlantActionPerformed;
+            if (harvestAction != null) harvestAction.performed += OnHarvestActionPerformed;
         }
 
         private void OnDisable()
         {
             if (moveToPointAction != null) moveToPointAction.performed -= OnMoveToPointPerformed;
             if (attackAction != null) attackAction.performed -= OnAttackPerformed;
+
+            // Unsubscribe from new actions
+            if (toggleCharacterMenuAction != null) toggleCharacterMenuAction.performed -= OnToggleCharacterMenuPerformed;
+            if (toggleInventoryMenuAction != null) toggleInventoryMenuAction.performed -= OnToggleInventoryMenuPerformed;
+            if (toggleMapMenuAction != null) toggleMapMenuAction.performed -= OnToggleMapMenuPerformed;
+            if (toggleTimelineMenuAction != null) toggleTimelineMenuAction.performed -= OnToggleTimelineMenuPerformed;
+            if (interactAlternateAction != null) interactAlternateAction.performed -= OnInteractAlternatePerformed;
+            if (plowAction != null) plowAction.performed -= OnPlowActionPerformed;
+            if (waterAction != null) waterAction.performed -= OnWaterActionPerformed;
+            if (plantAction != null) plantAction.performed -= OnPlantActionPerformed;
+            if (harvestAction != null) harvestAction.performed -= OnHarvestActionPerformed;
         }
 
         private void Update()
         {
-            // Handle menu inputs first (still using old input for menus for now)
-            HandleLegacyMenuInput();
+            // Legacy input methods HandleLegacyMenuInput() and HandleInteractions() (which calls HandleFarmingInput())
+            // will be removed or their contents gutted as logic moves to event handlers.
+            // The raycasting logic from HandleInteractions for finding interactables will still be needed
+            // perhaps called from OnInteractAlternatePerformed or periodically in Update to know what is in range.
 
-            // Only process gameplay inputs if no menu is open
+            // Only process continuous gameplay updates if no menu is open
             if (!isMenuOpen)
             {
-                HandleWASDMovement();
-                HandleRotationWithMouse(); // Renamed for clarity
-                HandleInteractions(); // Still uses old input for E, Q, R, F, G
-                // Attack is handled by OnAttackPerformed
+                HandleWASDMovement(); // Reads continuous input, so stays in Update
+                HandleRotationWithMouse(); // Reads continuous input, so stays in Update
                 UpdateAgentAndRigidbodyState();
+
+                // Update current interactable context (needed for context-sensitive actions like farming)
+                UpdateInteractableContext();
             }
         }
 
@@ -150,38 +184,46 @@ namespace REcreationOfSpace.Player
             // For now, the primary control flow is: click -> agent moves (kinematic=true). WASD -> rb moves (kinematic=false), agent stops.
         }
 
-        private void HandleLegacyMenuInput()
+        // New Input System Event Handlers for Menus
+        private void OnToggleCharacterMenuPerformed(InputAction.CallbackContext context)
         {
-            // Character menu
-            if (Input.GetKeyDown(characterMenuKey))
-            {
-                ToggleCharacterMenu();
-            }
+            if (context.performed) ToggleCharacterMenu();
+        }
 
-            // Inventory menu (placeholder)
-            if (Input.GetKeyDown(inventoryKey))
+        private void OnToggleInventoryMenuPerformed(InputAction.CallbackContext context)
+        {
+            if (context.performed)
             {
-                // TODO: Implement inventory menu
-                Debug.Log("Inventory not implemented yet");
-            }
-
-            // Map menu (placeholder)
-            if (Input.GetKeyDown(mapKey))
-            {
-                // TODO: Implement map menu
-                Debug.Log("Map not implemented yet");
-            }
-
-            // Timeline menu
-            if (Input.GetKeyDown(timelineKey))
-            {
-                if (timelineUI != null)
-                {
-                    timelineUI.Toggle();
-                    SetMenuOpen(timelineUI.gameObject.activeSelf);
-                }
+                // TODO: Implement inventory menu toggle logic here
+                Debug.Log("Inventory toggle action performed (Not Implemented)");
+                // Example: if (inventoryUI != null) { inventoryUI.Toggle(); SetMenuOpen(inventoryUI.isActive); }
             }
         }
+
+        private void OnToggleMapMenuPerformed(InputAction.CallbackContext context)
+        {
+            if (context.performed)
+            {
+                // TODO: Implement map menu toggle logic here
+                Debug.Log("Map toggle action performed (Not Implemented)");
+                // Example: if (mapUI != null) { mapUI.Toggle(); SetMenuOpen(mapUI.isActive); }
+            }
+        }
+
+        private void OnToggleTimelineMenuPerformed(InputAction.CallbackContext context)
+        {
+            if (context.performed && timelineUI != null)
+            {
+                timelineUI.Toggle();
+                SetMenuOpen(timelineUI.gameObject.activeSelf);
+            }
+        }
+
+        // This method will be removed or its contents moved
+        // private void HandleLegacyMenuInput()
+        // {
+        //     // Contents moved to individual OnToggle...Performed methods
+        // }
 
         private void OnMoveToPointPerformed(InputAction.CallbackContext context)
         {
@@ -266,94 +308,103 @@ namespace REcreationOfSpace.Player
             transform.Rotate(Vector3.up * mouseX * rotationSpeed * Time.deltaTime);
         }
 
-        private void HandleInteractions()
+        private void UpdateInteractableContext()
         {
-            // Check for interactable objects
-            Ray ray = new Ray(transform.position, transform.forward);
+            // Raycast to find interactable objects in front of the player
+            Ray ray = new Ray(mainCamera.transform.position, mainCamera.transform.forward); // Or from player's eyes/center
             RaycastHit hit;
 
-            if (Physics.Raycast(ray, out hit, interactionRange))
+            // Reset current interactables
+            FarmPlot detectedFarmPlot = null;
+            Workbench detectedWorkbench = null;
+            ResourceNode detectedResourceNode = null;
+
+            if (Physics.Raycast(ray, out hit, interactionRange)) // Consider a layer mask for interactables
             {
-                // Handle farm plot interactions
-                FarmPlot farmPlot = hit.collider.GetComponent<FarmPlot>();
-                if (farmPlot != null)
-                {
-                    currentFarmPlot = farmPlot;
-                    HandleFarmingInput();
-                }
-                else
-                {
-                    currentFarmPlot = null;
-                }
-
-                // Handle workbench interactions
-                Workbench workbench = hit.collider.GetComponent<Workbench>();
-                if (workbench != null)
-                {
-                    currentWorkbench = workbench;
-                    if (Input.GetKeyDown(KeyCode.E))
-                    {
-                        workbench.OnInteractionRangeEntered(gameObject);
-                        SetMenuOpen(true);
-                    }
-                }
-                else if (currentWorkbench != null)
-                {
-                    currentWorkbench.OnInteractionRangeExited(gameObject);
-                    currentWorkbench = null;
-                }
-
-                // Handle resource node interactions
-                ResourceNode resourceNode = hit.collider.GetComponent<ResourceNode>();
-                if (resourceNode != null)
-                {
-                    currentResourceNode = resourceNode;
-                    if (Input.GetKeyDown(KeyCode.E))
-                    {
-                        resourceNode.Interact();
-                    }
-                }
-                else
-                {
-                    currentResourceNode = null;
-                }
+                detectedFarmPlot = hit.collider.GetComponent<FarmPlot>();
+                detectedWorkbench = hit.collider.GetComponent<Workbench>();
+                detectedResourceNode = hit.collider.GetComponent<ResourceNode>();
             }
-            else
+
+            // Update FarmPlot context
+            if (currentFarmPlot != detectedFarmPlot)
             {
-                currentFarmPlot = null;
+                currentFarmPlot = detectedFarmPlot;
+                // Potentially show/hide UI prompts for farm plot
+            }
+
+            // Update Workbench context
+            if (currentWorkbench != detectedWorkbench)
+            {
                 if (currentWorkbench != null)
                 {
-                    currentWorkbench.OnInteractionRangeExited(gameObject);
-                    currentWorkbench = null;
+                    // currentWorkbench.OnInteractionRangeExited(gameObject); // This might still be needed if UI closes on exit
                 }
-                currentResourceNode = null;
+                currentWorkbench = detectedWorkbench;
+                if (currentWorkbench != null)
+                {
+                    // currentWorkbench.OnInteractionRangeEntered(gameObject); // This might be too aggressive, E key will handle open
+                }
+                // Potentially show/hide UI prompts for workbench
+            }
+
+            // Update ResourceNode context
+            if (currentResourceNode != detectedResourceNode)
+            {
+                currentResourceNode = detectedResourceNode;
+                // Potentially show/hide UI prompts for resource node
             }
         }
 
-        private void HandleFarmingInput()
+        private void OnInteractAlternatePerformed(InputAction.CallbackContext context)
         {
-            if (currentFarmPlot == null)
-                return;
+            if (!context.performed || isMenuOpen) return;
 
-            if (Input.GetKeyDown(plowKey) && currentFarmPlot.CanPlow())
+            // Prioritize interactions: Workbench > ResourceNode (or define your own priority)
+            if (currentWorkbench != null)
             {
-                currentFarmPlot.Plow();
+                currentWorkbench.OnInteractionRangeEntered(gameObject); // Assuming this opens the UI
+                SetMenuOpen(true); // Assuming workbench interaction opens a menu
+                return;
             }
-            else if (Input.GetKeyDown(waterKey) && currentFarmPlot.CanWater())
+
+            if (currentResourceNode != null)
             {
-                currentFarmPlot.Water();
+                currentResourceNode.Interact();
+                return;
             }
-            else if (Input.GetKeyDown(plantKey))
-            {
-                // For now, just try to plant a basic crop
-                // You could add a crop selection UI later
-                currentFarmPlot.Plant("Wheat");
-            }
-            else if (Input.GetKeyDown(harvestKey) && currentFarmPlot.CanHarvest())
-            {
-                currentFarmPlot.Harvest();
-            }
+            // Add other generic interactions here if any
         }
+
+        private void OnPlowActionPerformed(InputAction.CallbackContext context)
+        {
+            if (!context.performed || isMenuOpen || currentFarmPlot == null) return;
+            if (currentFarmPlot.CanPlow()) currentFarmPlot.Plow();
+        }
+
+        private void OnWaterActionPerformed(InputAction.CallbackContext context)
+        {
+            if (!context.performed || isMenuOpen || currentFarmPlot == null) return;
+            if (currentFarmPlot.CanWater()) currentFarmPlot.Water();
+        }
+
+        private void OnPlantActionPerformed(InputAction.CallbackContext context)
+        {
+            if (!context.performed || isMenuOpen || currentFarmPlot == null) return;
+            // For now, just try to plant a basic crop
+            // You could add a crop selection UI later
+            currentFarmPlot.Plant("Wheat");
+        }
+
+        private void OnHarvestActionPerformed(InputAction.CallbackContext context)
+        {
+            if (!context.performed || isMenuOpen || currentFarmPlot == null) return;
+            if (currentFarmPlot.CanHarvest()) currentFarmPlot.Harvest();
+        }
+
+        // Legacy methods HandleInteractions() and HandleFarmingInput() are now removed.
+        // Their logic has been integrated into UpdateInteractableContext() and the
+        // OnInteractAlternatePerformed, OnPlowActionPerformed, etc., methods.
 
         private void OnAttackPerformed(InputAction.CallbackContext context)
         {
